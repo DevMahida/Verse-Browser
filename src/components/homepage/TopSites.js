@@ -90,7 +90,7 @@ export default function TopSites() {
               <button 
                 onClick={() => hideTopSite(site.fullHostname)}
                 aria-label={`Remove ${site.name} from Top Sites`}
-                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white z-20 shadow-lg hover:scale-110 transition-transform relative before:absolute before:-inset-2 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
+                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white z-20 shadow-lg hover:scale-110 transition-transform before:absolute before:-inset-2 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
               >
                 <X size={14} />
               </button>
@@ -126,7 +126,7 @@ export default function TopSites() {
         <button 
           onClick={() => setIsEditing(!isEditing)}
           aria-label={isEditing ? "Done editing" : "Edit shortcuts"}
-          className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors mb-6 focus-visible:ring-2 focus-visible:outline-none ${isEditing ? 'bg-foreground/ text-foreground' : 'text-foreground/70 hover:text-foreground hover:bg-foreground/10'}`}
+          className={`w-11 h-11 min-w-11 min-h-11 rounded-full flex items-center justify-center transition-colors mb-6 focus-visible:ring-2 focus-visible:outline-none ${isEditing ? 'bg-foreground/10 text-foreground' : 'text-foreground/70 hover:text-foreground hover:bg-foreground/10'}`}
           title={isEditing ? "Done editing" : "Edit shortcuts"}
         >
           <MoreVertical size={18} />

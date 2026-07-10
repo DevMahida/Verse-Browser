@@ -21,6 +21,15 @@ export default function HeroSection() {
     }
   };
 
+  const handleAISearch = () => {
+    if (inputValue.trim() !== '') {
+      const { setAISidebarOpen, setAiQueryToExecute } = useBrowserStore.getState();
+      setAiQueryToExecute(inputValue.trim());
+      setAISidebarOpen(true);
+      setIsFocused(false);
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       handleSearch(inputValue);
@@ -78,8 +87,8 @@ export default function HeroSection() {
             placeholder="Search the web or ask AI anything..."
           />
           <button 
-            onClick={handleSearch}
-            className="bg-accent text-white hover:bg-accent-hover px-5 py-2.5 rounded-full font-medium flex items-center shadow-[0_0_15px_rgba(107,70,193,0.4)] transition-all ml-2 text-sm"
+            onClick={handleAISearch}
+            className="bg-accent text-white hover:bg-accent-hover px-5 py-2.5 rounded-full font-medium flex items-center shadow-[0_0_15px_rgba(107,70,193,0.4)] transition-all ml-2 text-sm cursor-pointer"
           >
             <Sparkles className="w-4 h-4 mr-2" />
             AI Search

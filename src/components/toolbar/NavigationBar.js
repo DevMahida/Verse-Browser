@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -10,9 +10,12 @@ import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
 import PermissionPrompt from "./PermissionPrompt";
 import SiteSettingsPopup from "./SiteSettingsPopup";
+import HistoryPopup from "./HistoryPopup";
+import DownloadsPopup from "./DownloadsPopup";
+import BrowserMenu from "./BrowserMenu";
 
 export default function NavigationBar() {
-  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, theme, toggleTheme } = useBrowserStore(
+  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser } = useBrowserStore(
     useShallow((state) => ({
       toggleAISidebar: state.toggleAISidebar,
       isAISidebarOpen: state.isAISidebarOpen,
@@ -27,30 +30,55 @@ export default function NavigationBar() {
       toggleBookmark: state.toggleBookmark,
       openDownloadsTab: state.openDownloadsTab,
       openExtensionsTab: state.openExtensionsTab,
+      openSettingsTab: state.openSettingsTab,
       theme: state.theme,
       toggleTheme: state.toggleTheme,
+      addTab: state.addTab,
+      setDropdownOffset: state.setDropdownOffset,
+      isIncognitoWindow: state.isIncognitoWindow,
+      userProfilePic: state.userProfilePic,
+      currentUser: state.currentUser,
     }))
   );
   
   const activePaneTabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
   const activeTab = tabs.find(t => t.id === activePaneTabId);
+  const zoomLevel = activeTab?.zoomLevel || 1.0;
+  const zoomPercentage = Math.round(zoomLevel * 100);
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
+  const [showHistoryPopup, setShowHistoryPopup] = useState(false);
+  const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const { suggestions } = useSearchSuggestions(inputValue);
   const overflowMenuRef = useRef(null);
   const inputRef = useRef(null);
+  const historyRef = useRef(null);
+  const downloadsRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target)) {
-        setShowOverflowMenu(false);
+      if (historyRef.current && !historyRef.current.contains(e.target)) {
+        setShowHistoryPopup(false);
+      }
+      if (downloadsRef.current && !downloadsRef.current.contains(e.target)) {
+        setShowDownloadsPopup(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    let offset = 0;
+    if (showHistoryPopup) offset = 420;
+    else if (showDownloadsPopup) offset = 420;
+    else if (showSiteSettings) offset = 250;
+    else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
+    
+    setDropdownOffset(offset);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, isFocused, suggestions.length, setDropdownOffset]);
+
 
   useEffect(() => {
     if (activeTab) {
@@ -85,9 +113,10 @@ export default function NavigationBar() {
   };
 
   const handleBack = () => {
-    const webview = document.getElementById(`webview-${activePaneTabId}`);
-    if (webview && webview.canGoBack && webview.canGoBack()) {
-      webview.goBack();
+    if (activeTab?.canGoBack) {
+      if (window.electron?.tabManager) {
+        window.electron.tabManager.action({ tabId: activePaneTabId, action: 'goBack' });
+      }
     } else if (activeTab?.url !== 'browser://newtab') {
       // Save current URL so we can go "forward" back to it later
       useBrowserStore.getState().updateTab(activePaneTabId, { fallbackForwardUrl: activeTab?.url });
@@ -103,19 +132,18 @@ export default function NavigationBar() {
       return;
     }
 
-    const webview = document.getElementById(`webview-${activePaneTabId}`);
-    if (webview && webview.canGoForward && webview.canGoForward()) {
-      webview.goForward();
+    if (activeTab?.canGoForward && window.electron?.tabManager) {
+      window.electron.tabManager.action({ tabId: activePaneTabId, action: 'goForward' });
     }
   };
 
   const handleReloadOrStop = () => {
-    const webview = document.getElementById(`webview-${activePaneTabId}`);
-    if (!webview) return;
-    if (activeTab?.isLoading && webview.stop) {
-      webview.stop();
-    } else if (webview.reload) {
-      webview.reload();
+    if (!window.electron?.tabManager) return;
+    
+    if (activeTab?.isLoading) {
+      window.electron.tabManager.action({ tabId: activePaneTabId, action: 'stop' });
+    } else {
+      window.electron.tabManager.action({ tabId: activePaneTabId, action: 'reload' });
     }
   };
 
@@ -135,7 +163,7 @@ export default function NavigationBar() {
           onClick={handleBack} 
           aria-label="Go back"
           className={clsx(
-            "p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+            "p-2 rounded-lg transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
             canGoBack ? "hover:bg-foreground/10 hover:text-foreground" : "opacity-50 cursor-not-allowed"
           )}
         >
@@ -145,7 +173,7 @@ export default function NavigationBar() {
           onClick={handleForward} 
           aria-label="Go forward"
           className={clsx(
-            "p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+            "p-2 rounded-lg transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
             canGoForward ? "hover:bg-foreground/10 hover:text-foreground" : "opacity-50 cursor-not-allowed"
           )}
         >
@@ -154,14 +182,14 @@ export default function NavigationBar() {
         <button 
           onClick={handleReloadOrStop}
           aria-label={activeTab?.isLoading ? "Stop loading" : "Reload page"}
-          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
         >
           {activeTab?.isLoading ? <X size={18} /> : <RotateCw size={18} />}
         </button>
         <button 
           onClick={handleHome}
           aria-label="Go home"
-          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
         >
           <Home size={18} />
         </button>
@@ -224,34 +252,55 @@ export default function NavigationBar() {
 
       {/* Extensions & Tools */}
       <div className="flex items-center space-x-1 text-foreground/70" ref={overflowMenuRef}>
-        <button aria-label="Shield Security" className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none">
-          <Shield size={18} />
-        </button>
-        <button 
-          onClick={openDownloadsTab}
-          aria-label="Downloads"
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-          title="Downloads"
-        >
-          <Download size={18} />
-        </button>
-        <button 
-          onClick={openHistoryTab}
-          aria-label="History"
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-          title="History"
-        >
-          <Clock size={18} />
-        </button>
+        <div className="relative hidden lg:flex" ref={downloadsRef}>
+          <button 
+            onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
+            aria-label="Downloads"
+            className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+            title="Downloads"
+          >
+            <Download size={18} />
+          </button>
+          {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
+        </div>
+        <div className="relative hidden lg:flex" ref={historyRef}>
+          <button 
+            onClick={() => setShowHistoryPopup(!showHistoryPopup)}
+            aria-label="History"
+            className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+            title="History"
+          >
+            <Clock size={18} />
+          </button>
+          {showHistoryPopup && <HistoryPopup onClose={() => setShowHistoryPopup(false)} />}
+        </div>
         <button 
           onClick={openExtensionsTab}
           aria-label="Extensions"
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-11 min-h-11 items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
           title="Extensions"
         >
           <Puzzle size={18} />
         </button>
-        
+
+        {/* User Account / Incognito */}
+        {isIncognitoWindow ? (
+          <div className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70">
+            <EyeOff size={16} />
+            <span className="text-xs font-medium">Incognito</span>
+          </div>
+        ) : (
+          <button className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none">
+            {userProfilePic ? (
+              <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
+            ) : (
+              <div className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center text-accent">
+                {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
+              </div>
+            )}
+          </button>
+        )}
+
         {/* Divider */}
         <div className="w-px h-4 bg-border mx-1" />
 
@@ -260,7 +309,7 @@ export default function NavigationBar() {
           <button 
             onClick={clearSplitView}
             aria-label="Close Split View"
-            className="p-2 rounded-lg transition-colors flex items-center justify-center bg-accent text-white hover:bg-accent-hover px-3 text-sm font-medium mr-2 min-h-[44px] focus-visible:ring-2 focus-visible:outline-none"
+            className="p-2 rounded-lg transition-colors flex items-center justify-center bg-accent text-white hover:bg-accent-hover px-3 text-sm font-medium mr-2 min-h-11 focus-visible:ring-2 focus-visible:outline-none"
           >
             Close Split
           </button>
@@ -269,52 +318,21 @@ export default function NavigationBar() {
         <button 
           onClick={toggleAISidebar}
           aria-label="Toggle AI Sidebar"
-          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-[44px] min-h-[44px] focus-visible:ring-2 focus-visible:outline-none ${isAISidebarOpen ? 'bg-accent/20 text-accent hover:bg-accent/30' : 'hover:bg-foreground/10 hover:text-foreground'}`}
+          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-11 min-h-11 focus-visible:ring-2 focus-visible:outline-none ${isAISidebarOpen ? 'bg-accent/20 text-accent hover:bg-accent/30' : 'hover:bg-foreground/10 hover:text-foreground'}`}
         >
           <Sparkles size={18} />
-        </button>
-        
-        <button aria-label="Languages" className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none">
-          <Languages size={18} />
         </button>
         <button 
           onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-[44px] min-h-[44px] items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-11 min-h-11 items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
           title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
         >
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        {/* Overflow Menu Button */}
-        <div className="relative flex lg:hidden">
-          <button 
-            onClick={() => setShowOverflowMenu(!showOverflowMenu)}
-            aria-label="More tools"
-            className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-          >
-            <MoreVertical size={18} />
-          </button>
-          
-          {showOverflowMenu && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-1 z-50 animate-in fade-in zoom-in-95">
-              <button onClick={() => { openDownloadsTab(); setShowOverflowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-foreground/10 flex items-center">
-                <Download size={16} className="mr-3 text-foreground/70" /> Downloads
-              </button>
-              <button onClick={() => { openHistoryTab(); setShowOverflowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-foreground/10 flex items-center">
-                <Clock size={16} className="mr-3 text-foreground/70" /> History
-              </button>
-              <button onClick={() => { openExtensionsTab(); setShowOverflowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-foreground/10 flex items-center">
-                <Puzzle size={16} className="mr-3 text-foreground/70" /> Extensions
-              </button>
-              <div className="h-px bg-border my-1" />
-              <button onClick={() => { toggleTheme(); setShowOverflowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-foreground/10 flex items-center">
-                {theme === 'dark' ? <Sun size={16} className="mr-3 text-foreground/70" /> : <Moon size={16} className="mr-3 text-foreground/70" />}
-                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Browser Menu Button */}
+        <BrowserMenu />
       </div>
     </div>
   );

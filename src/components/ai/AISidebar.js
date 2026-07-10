@@ -1,18 +1,35 @@
 "use client";
 
-import { X, Sparkles, Send, Settings, BookOpen, FileText, Languages, HelpCircle, List, FileEdit, Zap, Loader2, RotateCcw, PencilLine } from "lucide-react";
+import { X, Sparkles, Send, Settings, BookOpen, FileText, Languages, HelpCircle, List, FileEdit, Zap, Loader2, RotateCcw, PencilLine, Copy, Check, Square } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
 export default function AISidebar() {
-  const { setAISidebarOpen, activeTabId, splitTabId, focusedPane, tabs, openRouterApiKey, setOpenRouterApiKey } = useBrowserStore();
+  const { setAISidebarOpen, activeTabId, splitTabId, focusedPane, tabs, openRouterApiKey, setOpenRouterApiKey, aiQueryToExecute, setAiQueryToExecute } = useBrowserStore();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [targetLang, setTargetLang] = useState("Spanish");
+  const [copiedIndex, setCopiedIndex] = useState(null);
   const messagesEndRef = useRef(null);
+  const isProcessingRef = useRef(false);
+  const abortControllerRef = useRef(null);
+
+  const handleCopy = (text, idx) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(idx);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  };
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -22,18 +39,26 @@ export default function AISidebar() {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (aiQueryToExecute) {
+      const query = aiQueryToExecute;
+      setAiQueryToExecute(null);
+      handleChat(query);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiQueryToExecute]);
+
   const getPageContent = async (type = 'text') => {
     const tabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
-    const webview = document.getElementById(`webview-${tabId}`);
-    if (!webview) return "";
+    if (!window.electron || !window.electron.tabManager) return "";
     
     try {
       if (type === 'html') {
-        return await webview.executeJavaScript('document.documentElement.outerHTML');
+        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'document.documentElement.outerHTML' });
       } else if (type === 'selected') {
-        return await webview.executeJavaScript('window.getSelection().toString()');
+        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'window.getSelection().toString()' });
       } else {
-        return await webview.executeJavaScript('document.body.innerText');
+        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'document.body.innerText' });
       }
     } catch (e) {
       console.error("Failed to extract page content", e);
@@ -42,7 +67,8 @@ export default function AISidebar() {
   };
 
   const handleAction = async (endpoint, actionLabel, extraParams = {}, useSelectedOnly = false) => {
-    if (isLoading) return;
+    if (isLoading || isProcessingRef.current) return;
+    isProcessingRef.current = true;
     setIsLoading(true);
     
     setMessages(prev => [...prev, { role: 'user', content: `Please ${actionLabel.toLowerCase()}` }]);
@@ -63,9 +89,12 @@ export default function AISidebar() {
         return;
       }
 
+      abortControllerRef.current = new AbortController();
+
       const res = await fetch(`/api/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({ 
           endpoint,
           payload: {
@@ -94,16 +123,21 @@ export default function AISidebar() {
       
       setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      if (err.name === 'AbortError') {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Response stopped." }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChat = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleChat = async (queryOverride) => {
+    const query = typeof queryOverride === 'string' ? queryOverride.trim() : input.trim();
+    if (!query || isLoading || isProcessingRef.current) return;
     
-    const query = input.trim();
+    isProcessingRef.current = true;
     setInput("");
     setIsLoading(true);
     setMessages(prev => [...prev, { role: 'user', content: query }]);
@@ -114,9 +148,12 @@ export default function AISidebar() {
       const html = await getPageContent('html');
       const selectedText = await getPageContent('selected');
       
+      abortControllerRef.current = new AbortController();
+
       const res = await fetch(`/api/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({ 
           endpoint: '/rag',
           payload: {
@@ -139,9 +176,16 @@ export default function AISidebar() {
         throw new Error(data.error || `Server error: ${res.status}`);
       }
       setMessages(prev => [...prev, { role: 'assistant', content: data.answer || data.result || "No response received." }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
-    } finally {
+      isProcessingRef.current = false;
+      setIsLoading(false);
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        setMessages(prev => [...prev, { role: 'assistant', content: "Response stopped." }]);
+      } else {
+        console.error(e);
+        setMessages(prev => [...prev, { role: 'assistant', content: "An error occurred while connecting to the AI." }]);
+      }
+      isProcessingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -305,40 +349,55 @@ export default function AISidebar() {
         ) : (
           <div className="flex flex-col space-y-4">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group relative`}>
+              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group/msg relative w-full`}>
                 <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm ${msg.role === 'user' ? 'bg-accent text-white rounded-br-sm whitespace-pre-wrap' : 'bg-surface border border-border text-foreground rounded-bl-sm'}`}>
                   {msg.role === 'user' ? (
                     <div className="flex items-start gap-2">
                       <span>{msg.content}</span>
-                      <button
-                        onClick={() => {
-                          setInput(msg.content);
-                          setMessages([]);
-                        }}
-                        className="text-white/70 hover:text-white transition-colors cursor-pointer mt-0.5"
-                        title="Edit Search"
-                      >
-                        <PencilLine size={14} />
-                      </button>
+                      {!isLoading && (
+                        <button
+                          onClick={() => {
+                            setInput(msg.content);
+                            setMessages([]);
+                          }}
+                          className="text-white/70 hover:text-white transition-colors cursor-pointer mt-0.5"
+                          title="Edit Search"
+                        >
+                          <PencilLine size={14} />
+                        </button>
+                      )}
                     </div>
                   ) : (
-                    <ReactMarkdown
-                      components={{
-                        ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
-                        li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                        strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
-                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                        h1: ({node, ...props}) => <h1 className="text-lg font-bold my-2" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-base font-bold my-2" {...props} />,
-                        h3: ({node, ...props}) => <h3 className="text-sm font-bold my-2" {...props} />,
-                        a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
+                    <div className="flex flex-col w-full">
+                      <ReactMarkdown
+                        components={{
+                          ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
+                          ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
+                          li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                          strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
+                          p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                          h1: ({node, ...props}) => <h1 className="text-lg font-bold my-2" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="text-base font-bold my-2" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-sm font-bold my-2" {...props} />,
+                          a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
                   )}
                 </div>
+                {msg.role === 'assistant' && !isLoading && (
+                  <div className="flex items-center gap-2 mt-1.5 px-2">
+                    <button
+                      onClick={() => handleCopy(msg.content, idx)}
+                      className="p-1.5 hover:bg-foreground/5 rounded-md text-foreground/50 hover:text-foreground/80 transition-colors cursor-pointer flex items-center justify-center"
+                      title="Copy"
+                    >
+                      {copiedIndex === idx ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {isLoading && (
@@ -364,16 +423,26 @@ export default function AISidebar() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleChat()}
             disabled={isLoading}
-            className="flex-1 bg-transparent border-none outline-none text-sm text-foreground px-2 disabled:opacity-50"
+            className="flex-1 bg-transparent border-none focus:outline-none text-sm px-2 text-foreground disabled:opacity-50"
             placeholder="Ask anything about this page..."
           />
-          <button 
-            onClick={handleChat}
-            disabled={isLoading || !input.trim()}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-accent hover:bg-accent/10 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <Send size={16} />
-          </button>
+          {isLoading ? (
+            <button 
+              onClick={handleStop}
+              className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
+              title="Stop Generating"
+            >
+              <Square size={16} className="fill-current" />
+            </button>
+          ) : (
+            <button 
+              onClick={() => handleChat()}
+              disabled={!input.trim()}
+              className="p-2 bg-accent/10 hover:bg-accent/20 text-accent rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Send size={16} />
+            </button>
+          )}
         </div>
 
         {/* Footer Status */}

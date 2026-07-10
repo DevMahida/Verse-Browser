@@ -21,9 +21,12 @@ export const formatUrl = (input) => {
   }
 };
 
+const initialIsIncognito = false;
+
 export const useBrowserStore = create(
   persist(
     (set, get) => ({
+      isIncognitoWindow: initialIsIncognito,
       firebaseUid: null,
       lastHistoryDocId: null,
       history: [],
@@ -56,6 +59,8 @@ export const useBrowserStore = create(
       isPlayingAudio: false,
       isMuted: false,
       isPinned: false,
+      zoomLevel: 0,
+      findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
     },
   ],
   activeTabId: '1',
@@ -64,8 +69,11 @@ export const useBrowserStore = create(
   isAISidebarOpen: false,
   openRouterApiKey: '',
   setOpenRouterApiKey: (key) => set({ openRouterApiKey: key }),
+  aiQueryToExecute: null,
+  setAiQueryToExecute: (query) => set({ aiQueryToExecute: query }),
 
   // Split View State
+  dropdownOffset: 0,
   splitTabId: null,
   focusedPane: 'primary',
   setSplitTabId: (id) => set({ splitTabId: id, focusedPane: 'secondary' }),
@@ -103,6 +111,8 @@ export const useBrowserStore = create(
       isPlayingAudio: false,
       isMuted: false,
       isPinned: false,
+      zoomLevel: 0,
+      findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
     };
     
     if (afterTabId) {
@@ -147,6 +157,8 @@ export const useBrowserStore = create(
           isPlayingAudio: false,
           isMuted: false,
           isPinned: false,
+          zoomLevel: 0,
+          findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
         }],
         activeTabId: newId
       };
@@ -201,9 +213,19 @@ export const useBrowserStore = create(
     tabs: state.tabs.map(tab => tab.id === id ? { ...tab, ...updates } : tab)
   })),
 
+  updateFindState: (id, updates) => set((state) => ({
+    tabs: state.tabs.map(tab => tab.id === id ? { ...tab, findState: { ...tab.findState, ...updates } } : tab)
+  })),
+
   toggleMute: (id) => set((state) => ({
     tabs: state.tabs.map(tab => tab.id === id ? { ...tab, isMuted: !tab.isMuted } : tab)
   })),
+
+  setZoomLevel: (id, level) => set((state) => ({
+    tabs: state.tabs.map(tab => tab.id === id ? { ...tab, zoomLevel: level } : tab)
+  })),
+
+  setDropdownOffset: (offset) => set({ dropdownOffset: offset }),
 
   removeMultipleTabs: (ids) => set((state) => {
     const idsToRemove = new Set(ids);
@@ -220,7 +242,7 @@ export const useBrowserStore = create(
       newTabs = [{ 
         id: newId, title: 'New Tab', url: 'browser://newtab', favicon: null,
         isLoading: false, canGoBack: false, canGoForward: false, error: null,
-        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }];
       return { tabs: newTabs, activeTabId: newId, splitTabId: null, focusedPane: 'primary' };
     }
@@ -304,6 +326,8 @@ export const useBrowserStore = create(
         isPlayingAudio: false,
         isMuted: false,
         isPinned: false,
+        zoomLevel: 0,
+        findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
     };
@@ -317,7 +341,7 @@ export const useBrowserStore = create(
       tabs: [...state.tabs, { 
         id: newId, title: 'Extensions', url: 'browser://extensions', favicon: null,
         isLoading: false, canGoBack: false, canGoForward: false, error: null,
-        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
     };
@@ -331,7 +355,7 @@ export const useBrowserStore = create(
       tabs: [...state.tabs, { 
         id: newId, title: 'Settings', url: 'browser://settings', favicon: null,
         isLoading: false, canGoBack: false, canGoForward: false, error: null,
-        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
     };
@@ -345,7 +369,7 @@ export const useBrowserStore = create(
       tabs: [...state.tabs, { 
         id: newId, title: 'Extension Store', url: 'browser://store', favicon: null,
         isLoading: false, canGoBack: false, canGoForward: false, error: null,
-        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
     };
@@ -371,6 +395,8 @@ export const useBrowserStore = create(
         isPlayingAudio: false,
         isMuted: false,
         isPinned: false,
+        zoomLevel: 0,
+        findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
     };

@@ -22,15 +22,20 @@ export default function PermissionPrompt() {
   const [currentRequest, setCurrentRequest] = useState(null);
   const promptRef = useRef(null);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (activePermissionRequests.length > 0) {
-      setCurrentRequest(activePermissionRequests[0]);
-      setIsVisible(true);
-    } else {
-      setIsVisible(false);
-      const timer = setTimeout(() => setCurrentRequest(null), 300); // fade out duration
+      const timer = setTimeout(() => {
+        setCurrentRequest(activePermissionRequests[0]);
+        setIsVisible(true);
+      }, 0);
       return () => clearTimeout(timer);
+    } else {
+      const timer1 = setTimeout(() => setIsVisible(false), 0);
+      const timer2 = setTimeout(() => setCurrentRequest(null), 300); // fade out duration
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     }
   }, [activePermissionRequests]);
 

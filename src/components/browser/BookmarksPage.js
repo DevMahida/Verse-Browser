@@ -66,7 +66,7 @@ export default function BookmarksPage() {
                 <div className="mr-4 shrink-0">
                   {item.favicon ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.favicon} alt="" className="w-6 h-6 rounded bg-foreground/" />
+                    <img src={item.favicon} alt="" className="w-6 h-6 rounded bg-foreground/10" />
                   ) : (
                     <div className="w-6 h-6 rounded bg-surface-hover/80 flex items-center justify-center">
                       <Bookmark className="w-3 h-3 text-foreground/70" />

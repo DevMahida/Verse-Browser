@@ -42,7 +42,7 @@ export default function DownloadsPage() {
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-[clamp(1.5rem,4vw,1.875rem)] font-semibold flex items-center gap-3">
@@ -53,7 +53,7 @@ export default function DownloadsPage() {
               <button
                 onClick={clearCompletedDownloads}
                 aria-label="Clear completed downloads"
-                className="flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg bg-surface hover:bg-surface-hover transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+                className="flex items-center gap-2 px-4 py-2 min-h-11 rounded-lg bg-surface hover:bg-surface-hover transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
               >
                 <Trash2 size={16} />
                 Clear Completed
@@ -110,26 +110,26 @@ export default function DownloadsPage() {
 
                       <div className="flex items-center gap-2 ml-4 shrink-0">
                         {isProgressing && (
-                          <button aria-label="Pause download" onClick={() => window.electron?.pauseDownload(item.id)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Pause">
+                          <button aria-label="Pause download" onClick={() => window.electron?.pauseDownload(item.id)} className="p-2 min-w-11 min-h-11 flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Pause">
                             <Pause size={18} />
                           </button>
                         )}
                         {isPaused && (
-                          <button aria-label="Resume download" onClick={() => window.electron?.resumeDownload(item.id)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Resume">
+                          <button aria-label="Resume download" onClick={() => window.electron?.resumeDownload(item.id)} className="p-2 min-w-11 min-h-11 flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Resume">
                             <Play size={18} />
                           </button>
                         )}
                         {(isProgressing || isPaused) && (
-                          <button aria-label="Cancel download" onClick={() => window.electron?.cancelDownload(item.id)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-red-500/20 rounded-lg text-foreground/70 hover:text-red-400 transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Cancel">
+                          <button aria-label="Cancel download" onClick={() => window.electron?.cancelDownload(item.id)} className="p-2 min-w-11 min-h-11 flex items-center justify-center hover:bg-red-500/20 rounded-lg text-foreground/70 hover:text-red-400 transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Cancel">
                             <X size={18} />
                           </button>
                         )}
                         {isDone && item.path && (
                           <>
-                            <button aria-label="Open file" onClick={() => window.electron?.openFile(item.path)} className="px-3 py-1.5 min-h-[44px] text-sm font-medium bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none">
+                            <button aria-label="Open file" onClick={() => window.electron?.openFile(item.path)} className="px-3 py-1.5 min-h-11 text-sm font-medium bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none">
                               Open File
                             </button>
-                            <button aria-label="Show in folder" onClick={() => window.electron?.showInFolder(item.path)} className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Show in folder">
+                            <button aria-label="Show in folder" onClick={() => window.electron?.showInFolder(item.path)} className="p-2 min-w-11 min-h-11 flex items-center justify-center hover:bg-foreground/10 rounded-lg text-foreground/70 hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:outline-none" title="Show in folder">
                               <Folder size={18} />
                             </button>
                           </>

@@ -153,7 +153,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
         isActive 
           ? "bg-surface border-surface-hover text-foreground" 
           : "bg-transparent border-transparent text-foreground/70 hover:bg-surface-hover/50 hover:text-foreground/90",
-        tab.isPinned ? "px-2 w-10 justify-center flex-none" : "px-3 min-w-[48px] max-w-[240px] flex-1"
+        tab.isPinned ? "px-2 w-10 justify-center flex-none" : "px-3 min-w-12 max-w-60 flex-1"
       )}
     >
       <div 
@@ -166,7 +166,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
           <img src="/favicon.png" className={clsx("w-4 h-4 object-contain shrink-0", !tab.isPinned && "mr-2")} alt="" />
         ) : tab.favicon ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={tab.favicon} className={clsx("w-4 h-4 rounded-sm shrink-0 bg-foreground/", !tab.isPinned && "mr-2")} alt="" />
+          <img src={tab.favicon} className={clsx("w-4 h-4 rounded-sm shrink-0 bg-foreground/10", !tab.isPinned && "mr-2")} alt="" />
         ) : (
           <div className={clsx("w-4 h-4 rounded-full bg-surface-hover/80 shrink-0", !tab.isPinned && "mr-2")} />
         )}
@@ -218,7 +218,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
 }
 
 export default function TopBar() {
-  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab } = useBrowserStore(
+  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset } = useBrowserStore(
     useShallow((state) => ({
       tabs: state.tabs,
       activeTabId: state.activeTabId,
@@ -236,18 +236,26 @@ export default function TopBar() {
       switchAccount: state.switchAccount,
       toggleMute: state.toggleMute,
       openSettingsTab: state.openSettingsTab,
+      setDropdownOffset: state.setDropdownOffset,
     }))
   );
   
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [selectedLogoutAccount, setSelectedLogoutAccount] = useState('all');
-  const [showBrowserMenu, setShowBrowserMenu] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [frozenTabWidth, setFrozenTabWidth] = useState(null);
   const menuRef = useRef(null);
-  const browserMenuRef = useRef(null);
   const tabsContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (showProfileMenu || contextMenu) {
+      setDropdownOffset(250);
+    } else {
+      // Small timeout to avoid race condition with NavigationBar
+      setTimeout(() => setDropdownOffset(0), 10);
+    }
+  }, [showProfileMenu, contextMenu, setDropdownOffset]);
 
   const handleRemoveTab = (id) => {
     if (tabsContainerRef.current) {
@@ -309,9 +317,8 @@ export default function TopBar() {
     // If dragged vertically by more than 50 pixels, consider it a tear-off
     if (Math.abs(delta.y) > 50) {
       const draggedTab = tabs.find(t => t.id === active.id);
-      // Don't tear off the last tab or a pinned tab
       if (draggedTab && !draggedTab.isPinned && tabs.length > 1 && window.electron?.detachTab) {
-        window.electron.detachTab(draggedTab);
+        window.electron.detachTab(draggedTab, isIncognitoWindow);
         removeTab(draggedTab.id);
       }
       return;
@@ -345,9 +352,6 @@ export default function TopBar() {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
-      if (browserMenuRef.current && !browserMenuRef.current.contains(event.target)) {
-        setShowBrowserMenu(false);
-      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -363,12 +367,11 @@ export default function TopBar() {
       }}
     >
       {/* Invisible overlay to capture clicks over the webview when menus are open */}
-      {(showProfileMenu || showBrowserMenu) && (
+      {showProfileMenu && (
         <div 
           className="fixed inset-0 z-40 no-drag-region"
           onClick={() => {
             setShowProfileMenu(false);
-            setShowBrowserMenu(false);
           }}
         />
       )}
@@ -502,7 +505,7 @@ export default function TopBar() {
                     }}
                     className="w-full text-left px-4 py-2.5 hover:bg-foreground/10 flex items-center transition-colors cursor-pointer border-none"
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden mr-3 shrink-0 bg-foreground/ flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full overflow-hidden mr-3 shrink-0 bg-foreground/10 flex items-center justify-center">
                       {acc.pic ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={acc.pic} alt="" className="w-full h-full object-cover" />
@@ -547,66 +550,7 @@ export default function TopBar() {
           </div>
         )}
 
-        {/* Browser Menu Button */}
-        <div className="relative" ref={browserMenuRef}>
-          <button
-            onClick={() => setShowBrowserMenu(!showBrowserMenu)}
-            aria-label="Browser Menu"
-            className="relative before:absolute before:-inset-2 before:content-[''] h-8 w-8 ml-1 flex items-center justify-center rounded hover:bg-foreground/10 transition-colors border border-transparent hover:border-border text-foreground/80 focus-visible:ring-2 focus-visible:outline-none"
-            title="Menu"
-          >
-            <MoreVertical size={16} />
-          </button>
 
-          {showBrowserMenu && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-100 flex flex-col font-sans py-2 animate-in fade-in zoom-in-95 duration-100">
-              <button 
-                onClick={() => {
-                  addTab();
-                  setShowBrowserMenu(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm text-foreground/90 hover:bg-accent hover:text-white flex items-center transition-colors"
-              >
-                <Plus size={16} className="mr-3" />
-                New Tab
-              </button>
-              
-              <div className="h-px bg-border my-1" />
-              
-              <button className="w-full text-left px-4 py-2.5 text-sm text-foreground/90 hover:bg-foreground/10 flex items-center transition-colors">
-                <History size={16} className="mr-3 text-foreground/70" />
-                History
-              </button>
-              <button className="w-full text-left px-4 py-2.5 text-sm text-foreground/90 hover:bg-foreground/10 flex items-center transition-colors">
-                <Download size={16} className="mr-3 text-foreground/70" />
-                Downloads
-              </button>
-              
-              <div className="h-px bg-border my-1" />
-
-              <button 
-                onClick={() => {
-                  openSettingsTab();
-                  setShowBrowserMenu(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm text-foreground/90 hover:bg-foreground/10 flex items-center transition-colors"
-              >
-                <Settings size={16} className="mr-3 text-foreground/70" />
-                Settings
-              </button>
-
-              <div className="h-px bg-border my-1" />
-
-              <button 
-                onClick={() => window.electron?.close?.()}
-                className="w-full text-left px-4 py-2.5 text-sm text-foreground/90 hover:bg-red-500/10 hover:text-red-400 flex items-center transition-colors"
-              >
-                <LogOut size={16} className="mr-3" />
-                Exit Verse
-              </button>
-            </div>
-          )}
-        </div>
 
         <div className="flex items-center h-full space-x-0 ml-2">
           <button 
@@ -643,8 +587,8 @@ export default function TopBar() {
             
             <div className="space-y-2 mb-6 max-h-75 overflow-y-auto custom-scrollbar">
               {accounts?.map((acc, idx) => (
-                <div key={idx} className="flex items-center p-3 rounded-xl bg-foreground/ border border-border">
-                  <div className="w-8 h-8 rounded-full overflow-hidden mr-3 shrink-0 bg-foreground/ flex items-center justify-center">
+                <div key={idx} className="flex items-center p-3 rounded-xl bg-foreground/10 border border-border">
+                  <div className="w-8 h-8 rounded-full overflow-hidden mr-3 shrink-0 bg-foreground/10 flex items-center justify-center">
                     {acc.pic ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={acc.pic} alt="" className="w-full h-full object-cover" />

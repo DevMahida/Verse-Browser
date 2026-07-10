@@ -113,9 +113,8 @@ export default function SiteSettingsPopup({ url, onClose }) {
               onClick={() => {
                 const { activeTabId, splitTabId, focusedPane } = useBrowserStore.getState();
                 const tabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
-                const webview = document.getElementById(`webview-${tabId}`);
-                if (webview && webview.reload) {
-                  webview.reload();
+                if (window.electron?.tabManager) {
+                  window.electron.tabManager.action({ tabId, action: 'reload' });
                 }
                 onClose();
               }}

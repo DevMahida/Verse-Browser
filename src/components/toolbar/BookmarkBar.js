@@ -34,7 +34,7 @@ export default function BookmarkBar() {
         >
           {bookmark.favicon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={bookmark.favicon} className="w-3.5 h-3.5 mr-1.5 shrink-0 bg-foreground/ rounded-sm" alt="" />
+            <img src={bookmark.favicon} className="w-3.5 h-3.5 mr-1.5 shrink-0 bg-foreground/10 rounded-sm" alt="" />
           ) : (
             <div className="w-3.5 h-3.5 rounded-sm bg-gray-600 shrink-0 mr-1.5" />
           )}

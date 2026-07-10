@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, session, Menu, screen } = require("electron");
 const path = require("path");
+const { initTabManager } = require('./tabManager');
 
 const isDev = !app.isPackaged;
 
@@ -15,7 +16,7 @@ let downloadSettings = {
 };
 const activeDownloads = new Map();
 
-function createWindow(initialTab = null, x = undefined, y = undefined) {
+function createWindow(initialTab = null, x = undefined, y = undefined, isIncognito = false) {
   const options = {
     width: 1200,
     height: 800,
@@ -37,27 +38,20 @@ function createWindow(initialTab = null, x = undefined, y = undefined) {
   if (y !== undefined) options.y = y;
 
   const win = new BrowserWindow(options);
+  win._isIncognito = isIncognito;
   allWindows.add(win);
 
   let url = "http://localhost:3000";
+  const searchParams = new URLSearchParams();
   if (initialTab) {
-    url += `?initialTab=${encodeURIComponent(JSON.stringify(initialTab))}`;
+    searchParams.append('initialTab', JSON.stringify(initialTab));
   }
+  if (isIncognito) {
+    searchParams.append('incognito', 'true');
+  }
+  const qs = searchParams.toString();
+  if (qs) url += `?${qs}`;
   win.loadURL(url);
-
-  // Toggle DevTools on F12 and handle Reload
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.key === 'F12') {
-      win.webContents.toggleDevTools();
-      event.preventDefault();
-    }
-    
-    // Reload shortcuts
-    if (input.key.toLowerCase() === 'r' && input.control) {
-      win.webContents.send('keyboard-shortcut', input.shift ? 'hard-reload' : 'reload');
-      event.preventDefault();
-    }
-  });
 
   win.on('closed', () => {
     allWindows.delete(win);
@@ -78,6 +72,7 @@ function createWindow(initialTab = null, x = undefined, y = undefined) {
 
       for (const other of allWindows) {
         if (other === win || other.isDestroyed()) continue;
+        if (other._isIncognito !== win._isIncognito) continue;
         const [ox, oy] = other.getPosition();
         const [ow] = other.getSize();
 
@@ -100,21 +95,104 @@ function createWindow(initialTab = null, x = undefined, y = undefined) {
 }
 
 app.whenReady().then(async () => {
-  // Disable native menu entirely
-  Menu.setApplicationMenu(null);
+  initTabManager();
+
+  // Setup an invisible application menu to handle global shortcuts reliably
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Tab',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'new-tab')
+        },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'close-tab')
+        }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          label: 'Find',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'find')
+        },
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'delete' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Toggle Developer Tools',
+          accelerator: 'F12',
+          click: () => {
+             if (mainWindow && !mainWindow.isDestroyed()) {
+               mainWindow.webContents.send('keyboard-shortcut', 'toggle-devtools');
+             }
+          }
+        },
+        {
+          label: 'Toggle Developer Tools Alt',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => {
+             if (mainWindow && !mainWindow.isDestroyed()) {
+               mainWindow.webContents.send('keyboard-shortcut', 'toggle-devtools');
+             }
+          }
+        },
+        {
+          label: 'Inspect UI',
+          accelerator: 'CmdOrCtrl+Shift+U',
+          click: () => {
+             if (mainWindow && !mainWindow.isDestroyed()) {
+               mainWindow.webContents.toggleDevTools();
+             }
+          }
+        },
+        {
+          label: 'Reload',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+             if (mainWindow && !mainWindow.isDestroyed()) {
+               mainWindow.webContents.send('keyboard-shortcut', 'reload');
+             }
+          }
+        },
+        {
+          label: 'Hard Reload',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: () => {
+             if (mainWindow && !mainWindow.isDestroyed()) {
+               mainWindow.webContents.send('keyboard-shortcut', 'hard-reload');
+             }
+          }
+        }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   
+  const setupContextMenu = require('./contextMenu');
   
   // Intercept new windows created by webviews (e.g. target="_blank" or middle-click)
   app.on('web-contents-created', (event, contents) => {
-    if (contents.getType() === 'webview') {
-      contents.setWindowOpenHandler((details) => {
-        // Send a message to the browser window to open a new tab
-        if (contents.hostWebContents) {
-          contents.hostWebContents.send('webview-new-window', { url: details.url });
-        }
-        return { action: 'deny' }; // Prevent the native new window from spawning
-      });
-    }
+    setupContextMenu(contents);
+    
+    // We only prevent native window spawning for WebContentsView if needed, 
+    // but WebContentsView handles its own window open in tabManager.js.
   });
 
   createWindow();
@@ -137,6 +215,21 @@ app.whenReady().then(async () => {
     if (win && !win.isDestroyed()) win.close();
   });
 
+  ipcMain.on('window-toggle-fullscreen', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.setFullScreen(!win.isFullScreen());
+    }
+  });
+
+  ipcMain.on('window-new', () => {
+    createWindow();
+  });
+
+  ipcMain.on('window-new-incognito', () => {
+    createWindow(null, undefined, undefined, true);
+  });
+
   ipcMain.on('move-window', (event, { dx, dy }) => {
     const numDx = Number(dx);
     const numDy = Number(dy);
@@ -153,11 +246,11 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.on('detach-tab', (event, tabData) => {
+  ipcMain.on('detach-tab', (event, { tabData, isIncognito }) => {
     const cursorPoint = screen.getCursorScreenPoint();
     const startX = parseInt(Math.round(cursorPoint.x - 100), 10);
     const startY = parseInt(Math.round(cursorPoint.y - 20), 10);
-    createWindow(tabData, startX, startY);
+    createWindow(tabData, startX, startY, isIncognito);
   });
 
   // Merge handler: receives tabs from source window, sends to target window, closes source
@@ -171,6 +264,7 @@ app.whenReady().then(async () => {
 
     for (const other of allWindows) {
       if (other === sourceWin || other.isDestroyed()) continue;
+      if (other._isIncognito !== sourceWin._isIncognito) continue;
       const [ox, oy] = other.getPosition();
       const [ow] = other.getSize();
 

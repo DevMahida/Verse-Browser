@@ -54,12 +54,12 @@ export default function RecentTabs() {
             {/* Thumbnail Placeholder */}
             <div className={`h-32 w-full ${item.color} relative overflow-hidden flex items-center justify-center border-b border-border`}>
               {/* Fake UI elements inside thumbnail to match mockup */}
-              <div className="w-16 h-16 bg-foreground/ rounded-lg flex items-center justify-center backdrop-blur-sm shadow-xl">
+              <div className="w-16 h-16 bg-foreground/10 rounded-lg flex items-center justify-center backdrop-blur-sm shadow-xl">
                  <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-lg ${item.brandColor}`}>
                     {item.icon}
                  </div>
               </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent opacity-50" />
+              <div className="absolute inset-0 bg-linear-to-t from-surface to-transparent opacity-50" />
             </div>
 
             {/* Details */}
@@ -71,7 +71,7 @@ export default function RecentTabs() {
                   </div>
                   {item.domain}
                 </div>
-                <button aria-label="More options" className="text-gray-500 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:opacity-100">
+                <button aria-label="More options" className="text-gray-500 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity min-w-11 min-h-11 flex items-center justify-center -mr-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:opacity-100">
                   <MoreVertical size={14} />
                 </button>
               </div>

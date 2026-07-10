@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import TopBar from "../toolbar/TopBar";
 import NavigationBar from "../toolbar/NavigationBar";
 import BookmarkBar from "../toolbar/BookmarkBar";
+import FindBar from "../toolbar/FindBar";
 import AISidebar from "../ai/AISidebar";
 import WebviewContainer from "../browser/WebviewContainer";
 
@@ -51,6 +52,13 @@ export default function BrowserLayout() {
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
+    
+    // Set incognito state on the client to avoid hydration mismatch
+    const isIncognito = searchParams.get('incognito') === 'true';
+    if (isIncognito !== useBrowserStore.getState().isIncognitoWindow) {
+      useBrowserStore.setState({ isIncognitoWindow: isIncognito });
+    }
+
     const initialTabParam = searchParams.get('initialTab');
     if (initialTabParam) {
       try {
@@ -63,8 +71,21 @@ export default function BrowserLayout() {
       } catch (e) {
         console.error("Failed to parse initialTab", e);
       }
+    } else {
+      // No initialTab param provided (e.g. fresh New Window).
+      // If the current tab is the hardcoded '1', replace it with a unique ID
+      // so that multiple windows don't share the same tabId in Electron tabManager!
+      const state = useBrowserStore.getState();
+      if (state.tabs.length === 1 && state.tabs[0].id === '1') {
+        const uniqueId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        const uniqueTab = { ...state.tabs[0], id: uniqueId };
+        useBrowserStore.setState({
+          tabs: [uniqueTab],
+          activeTabId: uniqueId
+        });
+      }
     }
-  }, [updateTab]);
+  }, []);
 
   // Listen for cross-window tab merge events and new window events
   useEffect(() => {
@@ -86,10 +107,42 @@ export default function BrowserLayout() {
       useBrowserStore.getState().addTab(data.url, 'New Tab');
     });
 
+    // Handle context menu actions
+    const cleanupContextMenu = window.electron.onContextMenuCommand?.((data) => {
+      const { action, url } = data;
+      const { addTab, activeTabId } = useBrowserStore.getState();
+      
+      if (action === 'open-new-tab') {
+        addTab(url, 'New Tab', activeTabId);
+      } else if (action === 'open-new-window') {
+        if (window.electron.detachTab) {
+          window.electron.detachTab({ url, title: 'New Tab', id: Date.now().toString() }, false);
+        }
+      } else if (action === 'open-incognito') {
+        if (window.electron.detachTab) {
+          window.electron.detachTab({ url, title: 'New Tab', id: Date.now().toString() }, true);
+        }
+      }
+    });
+
+    // Handle global keyboard shortcuts
+    const cleanupShortcut = window.electron.onKeyboardShortcut?.((action) => {
+      const state = useBrowserStore.getState();
+      if (action === 'new-tab') {
+        state.addTab();
+      } else if (action === 'close-tab') {
+        state.removeTab(state.activeTabId);
+      } else if (action === 'find') {
+        state.updateFindState(state.activeTabId, { isVisible: true });
+      }
+    });
+
     return () => {
       cleanupRequest?.();
       cleanupReceive?.();
       cleanupNewWindow?.();
+      cleanupContextMenu?.();
+      cleanupShortcut?.();
     };
   }, [mergeTabs]);
 
@@ -126,9 +179,8 @@ export default function BrowserLayout() {
 
       if (key === 'r') {
         e.preventDefault();
-        const webview = document.getElementById(`webview-${activeTabId}`);
-        if (webview && webview.reload) {
-          webview.reload();
+        if (window.electron?.tabManager) {
+          window.electron.tabManager.action({ tabId: activeTabId, action: 'reload' });
         }
         return;
       }
@@ -240,6 +292,7 @@ export default function BrowserLayout() {
         {(bookmarkBarVisibility === 'always' || (bookmarkBarVisibility === 'new-tab' && tabs.find(t => t.id === activeTabId)?.url === 'browser://newtab')) && (
           <BookmarkBar />
         )}
+        <FindBar tabId={useBrowserStore.getState().focusedPane === 'secondary' && useBrowserStore.getState().splitTabId ? useBrowserStore.getState().splitTabId : activeTabId} />
       </div>
 
       {/* Main Content Area */}

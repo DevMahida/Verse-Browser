@@ -4,12 +4,31 @@ contextBridge.exposeInMainWorld("electron", {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
+  toggleFullscreen: () => ipcRenderer.send('window-toggle-fullscreen'),
+  newWindow: () => ipcRenderer.send('window-new'),
+  newIncognitoWindow: () => ipcRenderer.send('window-new-incognito'),
   checkGoogleLogin: (force) => ipcRenderer.invoke('check-google-login', force),
   logoutGoogle: () => ipcRenderer.invoke('logout-google'),
-  detachTab: (tabData) => ipcRenderer.send('detach-tab', tabData),
+  detachTab: (tabData, isIncognito) => ipcRenderer.send('detach-tab', { tabData, isIncognito }),
   getWindowCount: () => ipcRenderer.invoke('get-window-count'),
   sendTabsForMerge: (tabsData) => ipcRenderer.send('send-tabs-for-merge', tabsData),
   
+  // TabManager (WebContentsView/BrowserView)
+  tabManager: {
+    create: (data) => ipcRenderer.send('tab-create', data),
+    destroy: (tabId) => ipcRenderer.send('tab-destroy', tabId),
+    updateBounds: (data) => ipcRenderer.send('tab-update-bounds', data),
+    navigate: (data) => ipcRenderer.send('tab-navigate', data),
+    action: (data) => ipcRenderer.send('tab-action', data),
+    executeJavaScript: (data) => ipcRenderer.invoke('tab-execute-javascript', data),
+    capturePage: (tabId) => ipcRenderer.invoke('tab-capture-page', tabId),
+    onTabEvent: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('tab-event', handler);
+      return () => ipcRenderer.removeListener('tab-event', handler);
+    }
+  },
+
   // Custom Window Dragging
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
 
@@ -64,5 +83,12 @@ contextBridge.exposeInMainWorld("electron", {
     const handler = (_event, action) => callback(action);
     ipcRenderer.on('keyboard-shortcut', handler);
     return () => ipcRenderer.removeListener('keyboard-shortcut', handler);
+  },
+  
+  // Context Menu Commands
+  onContextMenuCommand: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('context-menu-command', handler);
+    return () => ipcRenderer.removeListener('context-menu-command', handler);
   }
 });

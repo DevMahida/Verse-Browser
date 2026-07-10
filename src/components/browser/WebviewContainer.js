@@ -11,176 +11,183 @@ import ExtensionStorePage from "./ExtensionStorePage";
 import SettingsPage from "./SettingsPage";
 
 function TabWebview({ tab, isActive, onFocus, styleClass }) {
-  const webviewRef = useRef(null);
-  const { updateTab, addToHistory, updateHistoryTitle, checkLoginState } = useBrowserStore(
+  const containerRef = useRef(null);
+  const { updateTab, updateFindState, addToHistory, updateHistoryTitle, checkLoginState, dropdownOffset, isIncognitoWindow } = useBrowserStore(
     useShallow((state) => ({
       updateTab: state.updateTab,
+      updateFindState: state.updateFindState,
       addToHistory: state.addToHistory,
       updateHistoryTitle: state.updateHistoryTitle,
       checkLoginState: state.checkLoginState,
+      dropdownOffset: state.dropdownOffset,
+      isIncognitoWindow: state.isIncognitoWindow,
     }))
   );
   
-  // Track the internal URL to avoid reacting to our own navigation events
   const internalUrl = useRef(tab.url);
-  // Only set the HTML src attribute once on mount
   const [initialUrl] = useState(tab.url);
+  const [screenshotUrl, setScreenshotUrl] = useState(null);
+  const isMounted = useRef(false);
 
+  // 1. Create & Destroy Tab
   useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
-
-    const handleNavigate = (e) => {
-      internalUrl.current = e.url;
-      addToHistory(e.url);
-      updateTab(tab.id, { 
-        url: e.url,
-        canGoBack: webview.canGoBack(),
-        canGoForward: webview.canGoForward(),
-        error: null // clear error on navigation
-      });
-    };
-
-    const handleTitleUpdate = (e) => {
-      updateTab(tab.id, { title: e.title });
-      updateHistoryTitle(internalUrl.current, e.title);
-    };
-    const handleFaviconUpdate = (e) => {
-      if (e.favicons && e.favicons.length > 0) {
-        updateTab(tab.id, { favicon: e.favicons[0] });
-      }
-    };
-    const handleStartLoading = () => updateTab(tab.id, { isLoading: true, error: null });
-    const handleStopLoading = () => {
-      updateTab(tab.id, { 
-        isLoading: false,
-        canGoBack: webview.canGoBack(),
-        canGoForward: webview.canGoForward()
-      });
-      if (internalUrl.current && internalUrl.current.includes('google.com')) {
-        checkLoginState();
-      }
-    };
-    const handleFailLoad = (e) => {
-      // Ignore abort errors (-3) as they are typically caused by navigating away
-      // before the page finishes loading
-      if (e.errorCode !== -3) {
-        updateTab(tab.id, { isLoading: false, error: e.errorDescription });
-      }
-    };
-
-    const handleMediaStarted = () => updateTab(tab.id, { isPlayingAudio: true });
-    const handleMediaPaused = () => updateTab(tab.id, { isPlayingAudio: false });
-
-    webview.addEventListener('did-navigate', handleNavigate);
-    webview.addEventListener('did-navigate-in-page', handleNavigate);
-    webview.addEventListener('page-title-updated', handleTitleUpdate);
-    webview.addEventListener('page-favicon-updated', handleFaviconUpdate);
-    webview.addEventListener('did-start-loading', handleStartLoading);
-    webview.addEventListener('did-stop-loading', handleStopLoading);
-    webview.addEventListener('did-fail-load', handleFailLoad);
-    webview.addEventListener('media-started-playing', handleMediaStarted);
-    webview.addEventListener('media-paused', handleMediaPaused);
+    if (!window.electron || !window.electron.tabManager) return;
     
-    // Apply mute state as soon as the webview is ready
-    const handleDomReady = () => {
-      try {
-        if (webviewRef.current) {
-          webviewRef.current.setAudioMuted(useBrowserStore.getState().tabs.find(t => t.id === tab.id)?.isMuted || false);
+    window.electron.tabManager.create({ 
+      tabId: tab.id, 
+      url: initialUrl, 
+      partition: isIncognitoWindow ? 'incognito' : 'persist:main' 
+    });
+    isMounted.current = true;
+
+    return () => {
+      isMounted.current = false;
+      window.electron.tabManager.destroy(tab.id);
+    };
+  }, [tab.id, initialUrl]);
+
+  // 2. Event Listener
+  useEffect(() => {
+    if (!window.electron || !window.electron.tabManager) return;
+    const cleanup = window.electron.tabManager.onTabEvent(({ tabId, eventName, data }) => {
+      if (tabId !== tab.id) return;
+      
+      switch (eventName) {
+        case 'did-navigate':
+        case 'did-navigate-in-page':
+          internalUrl.current = data.url;
+          if (!isIncognitoWindow) addToHistory(data.url);
+          updateTab(tab.id, { url: data.url, canGoBack: data.canGoBack, canGoForward: data.canGoForward, error: null });
+          break;
+        case 'page-title-updated':
+          updateTab(tab.id, { title: data.title });
+          if (!isIncognitoWindow) updateHistoryTitle(internalUrl.current, data.title);
+          break;
+        case 'page-favicon-updated':
+          if (data.favicons && data.favicons.length > 0) updateTab(tab.id, { favicon: data.favicons[0] });
+          break;
+        case 'did-start-loading':
+          updateTab(tab.id, { isLoading: true, error: null });
+          break;
+        case 'did-stop-loading':
+          updateTab(tab.id, { isLoading: false, canGoBack: data.canGoBack, canGoForward: data.canGoForward });
+          if (internalUrl.current && internalUrl.current.includes('google.com')) checkLoginState();
+          break;
+        case 'did-fail-load':
+          updateTab(tab.id, { isLoading: false, error: data.errorDescription });
+          break;
+        case 'zoom-changed':
+          useBrowserStore.getState().setZoomLevel(tab.id, data.level);
+          break;
+        case 'found-in-page':
+          console.log(`[WebviewContainer] found-in-page event received:`, data);
+          updateFindState(tab.id, { 
+            activeMatchOrdinal: data.activeMatchOrdinal, 
+            matches: data.matches 
+          });
+          break;
+        case 'media-started-playing':
+          updateTab(tab.id, { isPlayingAudio: true });
+          break;
+        case 'media-paused':
+          updateTab(tab.id, { isPlayingAudio: false });
+          break;
+      }
+    });
+    return cleanup;
+  }, [tab.id, updateTab, addToHistory, updateHistoryTitle, checkLoginState]);
+
+  // 3. Bounds & Visibility
+  useEffect(() => {
+    if (!window.electron || !window.electron.tabManager || !containerRef.current) return;
+    
+    const updateBounds = () => {
+      if (!isMounted.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      
+      // If the container has no size yet, don't update bounds
+      if (rect.width === 0 || rect.height === 0) return;
+      
+      const isHidden = dropdownOffset > 0 && screenshotUrl;
+      
+      window.electron.tabManager.updateBounds({
+        tabId: tab.id,
+        bounds: { 
+          x: Math.round(rect.x), 
+          y: Math.round(rect.y), 
+          width: Math.round(rect.width), 
+          height: Math.round(rect.height)
+        },
+        isActive: isActive && !isHidden
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(() => updateBounds());
+    resizeObserver.observe(containerRef.current);
+    
+    // Slight delay for initial bounds to ensure React has fully painted
+    const timer = setTimeout(updateBounds, 50);
+
+    return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+    };
+  }, [tab.id, isActive, styleClass, dropdownOffset, screenshotUrl]);
+
+  useEffect(() => {
+    let active = true;
+    if (dropdownOffset > 0 && window.electron?.tabManager?.capturePage) {
+      window.electron.tabManager.capturePage(tab.id).then(url => {
+        if (url && isMounted.current && active) {
+          setScreenshotUrl(url);
         }
-      } catch (e) {
-        console.error("Failed to set audio muted on dom-ready", e);
-      }
-    };
-    webview.addEventListener('dom-ready', handleDomReady);
-
-    // Prevent new windows from middle-clicking links, open as new tabs instead
-    const handleNewWindow = (e) => {
-      if (e.preventDefault) e.preventDefault();
-      useBrowserStore.getState().addTab(e.url, 'New Tab', tab.id);
-    };
-    webview.addEventListener('new-window', handleNewWindow);
-
-    return () => {
-      webview.removeEventListener('did-navigate', handleNavigate);
-      webview.removeEventListener('did-navigate-in-page', handleNavigate);
-      webview.removeEventListener('page-title-updated', handleTitleUpdate);
-      webview.removeEventListener('page-favicon-updated', handleFaviconUpdate);
-      webview.removeEventListener('did-start-loading', handleStartLoading);
-      webview.removeEventListener('did-stop-loading', handleStopLoading);
-      webview.removeEventListener('did-fail-load', handleFailLoad);
-      webview.removeEventListener('media-started-playing', handleMediaStarted);
-      webview.removeEventListener('media-paused', handleMediaPaused);
-      webview.removeEventListener('dom-ready', handleDomReady);
-      webview.removeEventListener('new-window', handleNewWindow);
-      if (onFocus) webview.removeEventListener('focus', onFocus);
-    };
-  }, [tab.id, updateTab, addToHistory, updateHistoryTitle, checkLoginState, onFocus]);
-
-  useEffect(() => {
-    const webview = webviewRef.current;
-    if (webview && onFocus) {
-      webview.addEventListener('focus', onFocus);
+      });
+    } else if (dropdownOffset === 0) {
+      // Clear it via a microtask to avoid React's synchronous effect cascade warning
+      Promise.resolve().then(() => {
+        if (isMounted.current && active) setScreenshotUrl(null);
+      });
     }
-    return () => {
-      if (webview && onFocus) webview.removeEventListener('focus', onFocus);
-    };
-  }, [onFocus]);
+    return () => { active = false; };
+  }, [dropdownOffset, tab.id]);
 
+  // 4. Remote Navigation
   useEffect(() => {
-    if (webviewRef.current) {
-      try {
-        webviewRef.current.setAudioMuted(tab.isMuted);
-      } catch (e) {
-        // Ignored: webview might not be dom-ready yet, it will be handled by the dom-ready listener
-      }
-    }
-  }, [tab.isMuted]);
-
-  useEffect(() => {
-    // If the URL was changed from the outside (e.g. address bar)
-    if (tab.url !== internalUrl.current) {
+    if (tab.url !== internalUrl.current && window.electron?.tabManager) {
       internalUrl.current = tab.url;
-      const webview = webviewRef.current;
-      if (webview) {
-        try {
-          if (typeof webview.loadURL === 'function') {
-            webview.loadURL(tab.url);
-          } else {
-            webview.src = tab.url;
-          }
-        } catch (e) {
-          // Fallback if loadURL fails (e.g. before dom-ready)
-          webview.src = tab.url;
-        }
-      }
+      window.electron.tabManager.navigate({ tabId: tab.id, url: tab.url });
     }
-  }, [tab.url]);
+  }, [tab.url, tab.id]);
 
+  // 5. Audio Muted state
+  useEffect(() => {
+    if (window.electron?.tabManager) {
+      window.electron.tabManager.action({ tabId: tab.id, action: 'set-muted', data: { muted: tab.isMuted } });
+    }
+  }, [tab.isMuted, tab.id]);
+  
+  // 6. Keyboard Shortcuts
   useEffect(() => {
     if (!isActive || !window.electron?.onKeyboardShortcut) return;
     
     const cleanup = window.electron.onKeyboardShortcut((action) => {
-      const webview = webviewRef.current;
-      if (!webview) return;
-      
       try {
-        if (action === 'reload') {
-          webview.reload();
-        } else if (action === 'hard-reload') {
-          webview.reloadIgnoringCache();
+        if (action === 'reload' || action === 'hard-reload' || action === 'toggle-devtools') {
+          window.electron.tabManager.action({ tabId: tab.id, action });
         }
       } catch (e) {
-        console.error('Failed to reload webview:', e);
+        console.error('Failed to handle keyboard shortcut on webview:', e);
       }
     });
     
     return cleanup;
-  }, [isActive]);
-
+  }, [isActive, tab.id]);
 
   return (
-    <div className={`absolute ${styleClass ? styleClass : 'inset-0 w-full h-full'} ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}>
+    <div 
+      className={`absolute ${styleClass ? styleClass : 'inset-0 w-full h-full'} ${isActive ? 'z-10' : 'z-0 pointer-events-none'}`}
+      onClick={onFocus}
+    >
       {tab.error && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background text-foreground">
           <div className="text-red-500 mb-4">
@@ -197,14 +204,16 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
           </div>
         </div>
       )}
-      <webview 
-        ref={webviewRef}
+      <div 
+        ref={containerRef}
         id={`webview-${tab.id}`}
-        src={initialUrl} 
-        className={`w-full h-full border-none outline-none bg-white ${tab.error ? 'opacity-0' : 'opacity-100'}`}
-        allowpopups="true"
-        partition="persist:main"
-      />
+        className={`w-full h-full border-none outline-none relative overflow-hidden ${tab.error ? 'opacity-0' : 'opacity-100'}`}
+      >
+        {screenshotUrl && dropdownOffset > 0 && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={screenshotUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+      </div>
     </div>
   );
 }
