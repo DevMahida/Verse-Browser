@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0f1015; /* Dark blue/black background */
+  --foreground: #e2e8f0; /* Light gray text */
+  --surface: #1a1b23; /* Slightly lighter background for elements */
+  --surface-hover: #2a2b36;
+  --accent: #6b46c1; /* Purple accent */
+  --accent-hover: #805ad5;
+  --border: #2d3748; /* Dark border */
+}
+
+.light-theme {
+  --background: #f8fafc; /* Very light gray/blue */
+  --foreground: #0f172a; /* Dark text */
+  --surface: #ffffff; /* White background for elements */
+  --surface-hover: #f1f5f9;
+  --accent: #6b46c1; /* Purple accent */
+  --accent-hover: #805ad5;
+  --border: #e2e8f0; /* Light border */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-border: var(--border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+  overflow: hidden; /* Prevent scrolling on the main window */
+}
+
+/* Electron Window Drag — outside @layer for maximum priority */
+.drag-region {
+  -webkit-app-region: drag !important;
+  app-region: drag !important;
+}
+
+.no-drag-region {
+  -webkit-app-region: no-drag !important;
+  app-region: no-drag !important;
+}
+
+/* Standard CSS overrides for hiding scrollbars globally */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
