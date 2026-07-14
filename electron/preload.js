@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld("electron", {
   getWindowCount: () => ipcRenderer.invoke('get-window-count'),
   sendTabsForMerge: (tabsData) => ipcRenderer.send('send-tabs-for-merge', tabsData),
   
+  // Profile Management
+  getProfiles: () => ipcRenderer.invoke('get-profiles'),
+  createProfile: (name, email) => ipcRenderer.invoke('create-profile', { name, email }),
+  switchProfile: (id) => ipcRenderer.send('switch-profile', id),
+  deleteProfile: (id) => ipcRenderer.invoke('delete-profile', id),
+  
   // TabManager (WebContentsView/BrowserView)
   tabManager: {
     create: (data) => ipcRenderer.send('tab-create', data),

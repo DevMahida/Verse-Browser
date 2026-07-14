@@ -5,14 +5,16 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit, deleteDoc, doc, writeBatch } from "firebase/firestore";
 
 export default function HistoryPage() {
-  const { navigate, activeTabId, addTab, firebaseUid } = useBrowserStore();
+  const { firebaseUid, currentUser, navigate, activeTabId, addTab, profileId } = useBrowserStore();
   const [history, setHistory] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const fbProfile = String(profileId);
 
   useEffect(() => {
     if (firebaseUid) {
       const q = query(
-        collection(db, "users", firebaseUid, "history"),
+        collection(db, "users", firebaseUid, "profiles", fbProfile, "history"),
         orderBy("visit_time", "desc"),
         limit(500)
       );
@@ -28,7 +30,7 @@ export default function HistoryPage() {
         }));
       }).catch(console.error);
     }
-  }, [firebaseUid]);
+  }, [firebaseUid, fbProfile]);
 
   const filteredHistory = history.filter(item => 
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -49,20 +51,28 @@ export default function HistoryPage() {
 
   const handleClearHistory = async () => {
     if (firebaseUid) {
-      const batch = writeBatch(db);
-      history.forEach(item => {
-        batch.delete(doc(db, "users", firebaseUid, "history", item.id));
-      });
-      await batch.commit();
-      setHistory([]);
+      try {
+        const batch = writeBatch(db);
+        history.forEach((item) => {
+          batch.delete(doc(db, "users", firebaseUid, "profiles", fbProfile, "history", item.id));
+        });
+        await batch.commit();
+        setHistory([]);
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
   const handleRemoveItem = async (e, id) => {
     e.stopPropagation();
     if (firebaseUid) {
-      await deleteDoc(doc(db, "users", firebaseUid, "history", id));
-      setHistory(prev => prev.filter(item => item.id !== id));
+      try {
+        await deleteDoc(doc(db, "users", firebaseUid, "profiles", fbProfile, "history", id));
+        setHistory(prev => prev.filter(item => item.id !== id));
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 

@@ -13,6 +13,7 @@ import SiteSettingsPopup from "./SiteSettingsPopup";
 import HistoryPopup from "./HistoryPopup";
 import DownloadsPopup from "./DownloadsPopup";
 import BrowserMenu from "./BrowserMenu";
+import ProfileMenu from "./ProfileMenu";
 
 export default function NavigationBar() {
   const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser } = useBrowserStore(
@@ -50,11 +51,13 @@ export default function NavigationBar() {
   const [showSiteSettings, setShowSiteSettings] = useState(false);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const { suggestions } = useSearchSuggestions(inputValue);
   const overflowMenuRef = useRef(null);
   const inputRef = useRef(null);
   const historyRef = useRef(null);
   const downloadsRef = useRef(null);
+  const profileRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -63,6 +66,9 @@ export default function NavigationBar() {
       }
       if (downloadsRef.current && !downloadsRef.current.contains(e.target)) {
         setShowDownloadsPopup(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -284,22 +290,31 @@ export default function NavigationBar() {
         </button>
 
         {/* User Account / Incognito */}
-        {isIncognitoWindow ? (
-          <div className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70">
-            <EyeOff size={16} />
-            <span className="text-xs font-medium">Incognito</span>
-          </div>
-        ) : (
-          <button className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none">
-            {userProfilePic ? (
-              <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
-            ) : (
-              <div className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center text-accent">
-                {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
-              </div>
-            )}
-          </button>
-        )}
+        <div className="relative flex items-center" ref={profileRef}>
+          {isIncognitoWindow ? (
+            <button 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70"
+            >
+              <EyeOff size={16} />
+              <span className="text-xs font-medium">Incognito</span>
+            </button>
+          ) : (
+            <button 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {userProfilePic ? (
+                <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <div className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center text-accent">
+                  {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
+                </div>
+              )}
+            </button>
+          )}
+          {showProfileMenu && <ProfileMenu onClose={() => setShowProfileMenu(false)} />}
+        </div>
 
         {/* Divider */}
         <div className="w-px h-4 bg-border mx-1" />

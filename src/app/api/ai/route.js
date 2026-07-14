@@ -1,44 +1,156 @@
 import { NextResponse } from 'next/server';
 
-const API_URL = "https://versr-ai-browser-verse.hf.space";
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_MODEL = 'meta-llama/llama-3.1-8b-instruct';
+
+async function callOpenRouter(apiKey, systemPrompt, userContent, model = DEFAULT_MODEL) {
+  const response = await fetch(OPENROUTER_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://verse-browser.app',
+      'X-Title': 'Verse Browser AI',
+    },
+    body: JSON.stringify({
+      model: model || DEFAULT_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      max_tokens: 1500,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    let errJson;
+    try { errJson = JSON.parse(errText); } catch { errJson = { error: { message: errText } }; }
+    const msg = errJson?.error?.message || `OpenRouter error: ${response.status}`;
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || 'No response received.';
+}
+
+function buildPrompt(endpoint, payload) {
+  const { text = '', html = '', query = '', title = '', url = '', selected_text = '', extraction_goal = '', platform = '', style = '', target_language = '' } = payload;
+
+  const pageCtx = `Page Title: ${title || 'Unknown'}\nPage URL: ${url || 'Unknown'}`;
+  const contentSnippet = (text || '').substring(0, 12000);
+
+  switch (endpoint) {
+    case '/summarize':
+      return {
+        system: 'You are a helpful AI assistant that summarizes web page content concisely and clearly. Use markdown formatting with headers and bullet points.',
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease provide a clear, concise summary of this page.`,
+        key: 'result',
+      };
+
+    case '/explain':
+      return {
+        system: 'You are a helpful AI tutor that explains articles in simple, easy-to-understand language. Use analogies and plain English.',
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease explain this article in simple terms.`,
+        key: 'result',
+      };
+
+    case '/key-points':
+      return {
+        system: 'You are a helpful assistant that extracts the most important key points from web content. Format as a numbered or bulleted markdown list.',
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nList the key points from this page.`,
+        key: 'result',
+      };
+
+    case '/faqs':
+      return {
+        system: 'You are a helpful assistant that generates frequently asked questions (FAQs) with answers based on web content. Format as markdown with bold questions.',
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nGenerate 5 relevant FAQs with answers based on this page.`,
+        key: 'faqs',
+      };
+
+    case '/study-notes':
+      return {
+        system: 'You are a study assistant that creates detailed, well-structured study notes from web content. Use headers, bullet points, and highlight key terms.',
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate comprehensive study notes from this page.`,
+        key: 'result',
+      };
+
+    case '/extract':
+      return {
+        system: `You are a data extraction assistant. Extract all ${extraction_goal || 'relevant data'} from the provided content. Return them as a clean markdown list.`,
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nExtract all ${extraction_goal || 'relevant information'} from this page.`,
+        key: 'result',
+      };
+
+    case '/generate-post':
+      return {
+        system: `You are a social media content creator. Create an engaging ${platform || 'social media'} post based on the page content. Be concise, engaging, and use relevant hashtags if appropriate.`,
+        user: `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate a ${platform || 'social media'} post about this page.`,
+        key: 'result',
+      };
+
+    case '/rewrite':
+      return {
+        system: `You are a writing assistant that rewrites content in a ${style || 'professional'} style. Maintain the original meaning while improving the tone and clarity.`,
+        user: `${pageCtx}\n\nContent to rewrite:\n${contentSnippet}\n\nRewrite this content in a ${style || 'professional'} style.`,
+        key: 'result',
+      };
+
+    case '/translate':
+      return {
+        system: `You are a professional translator. Translate the given text accurately to ${target_language || 'Spanish'}. Preserve the meaning and tone.`,
+        user: `Translate the following text to ${target_language || 'Spanish'}:\n\n${contentSnippet}`,
+        key: 'result',
+      };
+
+    case '/rag': {
+      // Parse and strip HTML for RAG/chat
+      const pageText = (text || html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 12000);
+      const selectionNote = selected_text ? `\n\nUser has selected this text on the page: "${selected_text.substring(0, 1000)}"` : '';
+      return {
+        system: 'You are a helpful AI assistant embedded in a web browser. You have access to the current web page content and can answer questions about it accurately. Be concise but thorough. Use markdown formatting where appropriate.',
+        user: `${pageCtx}\n\nPage Content:\n${pageText}${selectionNote}\n\nUser Question: ${query}`,
+        key: 'answer',
+      };
+    }
+
+    default:
+      return {
+        system: 'You are a helpful AI assistant.',
+        user: `${pageCtx}\n\nContent:\n${contentSnippet}\n\nQuery: ${query || 'Please help with this content.'}`,
+        key: 'result',
+      };
+  }
+}
 
 export async function POST(req) {
   try {
-    const { endpoint, payload } = await req.json();
-    
+    const body = await req.json();
+    const { endpoint, payload } = body;
+
     if (!endpoint || !payload) {
-      return NextResponse.json({ error: "Missing endpoint or payload" }, { status: 400 });
+      return NextResponse.json({ error: 'Missing endpoint or payload' }, { status: 400 });
     }
 
-    const finalPayload = {
-      ...payload,
-      api_key: payload.api_key || process.env.OPENROUTER_API_KEY
-    };
-
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(finalPayload),
-    });
-
-    // Check if the response is JSON
-    const contentType = response.headers.get("content-type");
-    let data;
-    if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      data = { error: "Non-JSON response", text };
-    }
-    
-    if (!response.ok) {
-      const errorMsg = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Server error: ${response.status}`;
-      return NextResponse.json({ error: errorMsg }, { status: response.status });
+    // API key is always taken from the server environment
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey.trim() === '') {
+      return NextResponse.json(
+        { error: 'Server API key not configured.' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json(data);
+    const { system, user, key } = buildPrompt(endpoint, payload);
+    const answer = await callOpenRouter(apiKey.trim(), system, user, payload.model);
+
+    // Return keyed response so frontend handles it correctly
+    return NextResponse.json({ [key]: answer, answer, result: answer });
+
   } catch (error) {
-    console.error("AI Proxy Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('AI Route Error:', error);
+    return NextResponse.json({ error: error.message || 'An unexpected error occurred.' }, { status: 500 });
   }
 }

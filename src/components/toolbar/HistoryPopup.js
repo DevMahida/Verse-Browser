@@ -5,15 +5,17 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
 export default function HistoryPopup({ onClose }) {
-  const { openHistoryTab, firebaseUid, navigate, activeTabId } = useBrowserStore();
+  const { openHistoryTab, firebaseUid, currentUser, navigate, activeTabId, profileId } = useBrowserStore();
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const fbProfile = String(profileId);
 
   useEffect(() => {
     let isMounted = true;
     if (firebaseUid) {
       const q = query(
-        collection(db, "users", firebaseUid, "history"),
+        collection(db, "users", firebaseUid, "profiles", fbProfile, "history"),
         orderBy("visit_time", "desc"),
         limit(5)
       );
@@ -43,7 +45,7 @@ export default function HistoryPopup({ onClose }) {
     return () => {
       isMounted = false;
     };
-  }, [firebaseUid]);
+  }, [firebaseUid, fbProfile]);
 
   const handleShowAll = () => {
     openHistoryTab();

@@ -4,6 +4,22 @@ import { auth, db } from '@/lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
+const getProfileId = () => {
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('profileId') || 'main';
+  }
+  return 'main';
+};
+const currentProfileId = getProfileId();
+
+const getFbProfile = (state) => {
+  if (state.profileId === 'main' && state.currentUser && state.currentUser.email) {
+    return state.currentUser.email;
+  }
+  return String(state.profileId);
+};
+
 export const formatUrl = (input) => {
   if (!input) return 'browser://newtab';
   
@@ -26,6 +42,7 @@ const initialIsIncognito = false;
 export const useBrowserStore = create(
   persist(
     (set, get) => ({
+      profileId: currentProfileId,
       isIncognitoWindow: initialIsIncognito,
       firebaseUid: null,
       lastHistoryDocId: null,
@@ -71,6 +88,184 @@ export const useBrowserStore = create(
   setOpenRouterApiKey: (key) => set({ openRouterApiKey: key }),
   aiQueryToExecute: null,
   setAiQueryToExecute: (query) => set({ aiQueryToExecute: query }),
+  // AI Chat History
+  aiChatSessions: [],
+  currentAiSessionId: null,
+  selectedAiModel: 'meta-llama/llama-3.1-8b-instruct',
+  setSelectedAiModel: (model) => set({ selectedAiModel: model }),
+  saveAiSession: async (session) => {
+    set((state) => {
+      const exists = state.aiChatSessions.find(s => s.id === session.id);
+      if (exists) {
+        return { aiChatSessions: state.aiChatSessions.map(s => s.id === session.id ? session : s) };
+      }
+      return { aiChatSessions: [session, ...state.aiChatSessions].slice(0, 50) };
+    });
+    
+    const state = get();
+    const fbProfile = getFbProfile(state);
+    
+    if (state.firebaseUid && !state.isIncognitoWindow) {
+      try {
+        const sessionPath = doc(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", session.id);
+        
+        // Save session metadata (without messages)
+        await setDoc(sessionPath, {
+          title: session.title || "New chat",
+          updatedAt: session.updatedAt || Date.now(),
+          lastSynced: serverTimestamp()
+        }, { merge: true });
+        
+        // Save each message as a sub-document in the ChatHistory sub-collection
+        const messagesCol = collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", session.id, "ChatHistory");
+        if (session.messages && session.messages.length > 0) {
+          for (let i = 0; i < session.messages.length; i++) {
+            const msg = session.messages[i];
+            const msgId = `msg_${i}`;
+            const cleanMsg = JSON.parse(JSON.stringify(msg));
+            await setDoc(doc(messagesCol, msgId), {
+              ...cleanMsg,
+              index: i,
+              timestamp: cleanMsg.timestamp || Date.now()
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to save AI session to Firebase", e);
+      }
+    }
+  },
+  deleteAiSession: async (id) => {
+    set((state) => ({
+      aiChatSessions: state.aiChatSessions.filter(s => s.id !== id),
+      currentAiSessionId: state.currentAiSessionId === id ? null : state.currentAiSessionId,
+    }));
+    
+    const state = get();
+    const fbProfile = getFbProfile(state);
+
+    if (state.firebaseUid && !state.isIncognitoWindow) {
+      try {
+        // Delete all ChatHistory docs in the sub-collection first
+        const messagesCol = collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", id, "ChatHistory");
+        const msgSnapshot = await getDocs(messagesCol);
+        for (const msgDoc of msgSnapshot.docs) {
+          await deleteDoc(msgDoc.ref);
+        }
+        // Then delete the session document
+        await deleteDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", id));
+      } catch (e) {
+        console.error("Failed to delete AI session from Firebase", e);
+      }
+    }
+  },
+  setCurrentAiSessionId: (id) => set({ currentAiSessionId: id }),
+  clearAllAiSessions: async () => {
+    const state = get();
+    const sessionsToDelete = state.aiChatSessions;
+    set({ aiChatSessions: [], currentAiSessionId: null });
+    
+    const fbProfile = getFbProfile(state);
+
+    if (state.firebaseUid && !state.isIncognitoWindow) {
+      try {
+        for (const session of sessionsToDelete) {
+          // Delete ChatHistory sub-collection for each session
+          const messagesCol = collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", session.id, "ChatHistory");
+          const msgSnapshot = await getDocs(messagesCol);
+          for (const msgDoc of msgSnapshot.docs) {
+            await deleteDoc(msgDoc.ref);
+          }
+          // Delete the session document
+          await deleteDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", session.id));
+        }
+      } catch (e) {
+        console.error("Failed to clear AI sessions from Firebase", e);
+      }
+    }
+  },
+
+  syncFirebaseData: async () => {
+    const state = get();
+    if (!state.firebaseUid) return;
+    
+    const fbProfile = getFbProfile(state);
+
+    // Fetch bookmarks
+    try {
+      const querySnapshot = await getDocs(collection(db, "users", state.firebaseUid, "profiles", fbProfile, "bookmarks"));
+      const firebaseBookmarks = [];
+      querySnapshot.forEach((doc) => {
+        firebaseBookmarks.push({ id: doc.id, ...doc.data() });
+      });
+      
+      if (firebaseBookmarks.length > 0) {
+        const currentBookmarks = get().bookmarks || [];
+        const merged = [...currentBookmarks];
+        let changed = false;
+        
+        firebaseBookmarks.forEach(fbBookmark => {
+          if (!merged.find(b => b.url === fbBookmark.url)) {
+            merged.push(fbBookmark);
+            changed = true;
+          }
+        });
+        
+        if (changed || currentBookmarks.length === 0) {
+          set({ bookmarks: merged });
+        }
+      }
+    } catch (e) { console.error("Failed to fetch bookmarks", e); }
+
+    // Fetch AI Chat Sessions (with messages from sub-collections)
+    try {
+      const aiQuerySnapshot = await getDocs(collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions"));
+      const firebaseSessions = [];
+      
+      for (const sessionDoc of aiQuerySnapshot.docs) {
+        const data = sessionDoc.data();
+        delete data.lastSynced;
+        
+        // Fetch ChatHistory from sub-collection
+        const messagesCol = collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", sessionDoc.id, "ChatHistory");
+        const msgSnapshot = await getDocs(messagesCol);
+        const messages = msgSnapshot.docs
+          .map(msgDoc => {
+            const msgData = msgDoc.data();
+            const sortIndex = msgData.index ?? 0;
+            delete msgData.index;
+            delete msgData.timestamp;
+            return { ...msgData, _index: sortIndex };
+          })
+          .sort((a, b) => a._index - b._index)
+          .map(({ _index, ...rest }) => rest);
+        
+        firebaseSessions.push({ ...data, id: sessionDoc.id, messages });
+      }
+      
+      if (firebaseSessions.length > 0) {
+        const currentSessions = get().aiChatSessions || [];
+        const merged = [...currentSessions];
+        let changed = false;
+        
+        firebaseSessions.forEach(fbSession => {
+          const idx = merged.findIndex(s => s.id === fbSession.id);
+          if (idx === -1) {
+            merged.push(fbSession);
+            changed = true;
+          } else if ((fbSession.updatedAt || 0) > (merged[idx].updatedAt || 0)) {
+            merged[idx] = fbSession;
+            changed = true;
+          }
+        });
+        
+        if (changed || currentSessions.length === 0) {
+          merged.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+          set({ aiChatSessions: merged.slice(0, 50) });
+        }
+      }
+    } catch (e) { console.error("Failed to fetch AI sessions", e); }
+  },
 
   // Split View State
   dropdownOffset: 0,
@@ -405,10 +600,12 @@ export const useBrowserStore = create(
   // History Actions
   addToHistory: async (url) => {
     if (url.startsWith('browser://')) return;
-    const uid = get().firebaseUid;
+    const state = get();
+    const uid = state.firebaseUid;
+    const fbProfile = getFbProfile(state);
     if (uid) {
       try {
-        const docRef = await addDoc(collection(db, "users", uid, "history"), {
+        const docRef = await addDoc(collection(db, "users", uid, "profiles", fbProfile, "history"), {
           url: url,
           title: url,
           favicon: null,
@@ -423,9 +620,10 @@ export const useBrowserStore = create(
 
   updateHistoryTitle: async (url, title) => {
     const state = get();
+    const fbProfile = getFbProfile(state);
     if (state.firebaseUid && state.lastHistoryDocId) {
       try {
-        await updateDoc(doc(db, "users", state.firebaseUid, "history", state.lastHistoryDocId), {
+        await updateDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "history", state.lastHistoryDocId), {
           title: title
         });
       } catch (err) {
@@ -443,13 +641,14 @@ export const useBrowserStore = create(
     const state = get();
     const isBookmarked = state.bookmarks.some(b => b.url === url);
     const uid = state.firebaseUid;
+    const fbProfile = getFbProfile(state);
 
     if (isBookmarked) {
       const bToRm = state.bookmarks.find(b => b.url === url);
       set({ bookmarks: state.bookmarks.filter(b => b.url !== url) });
       if (uid && bToRm) {
         try {
-          await deleteDoc(doc(db, "users", uid, "bookmarks", bToRm.id));
+          await deleteDoc(doc(db, "users", uid, "profiles", fbProfile, "bookmarks", bToRm.id));
         } catch (e) { console.error(e); }
       }
     } else {
@@ -460,7 +659,7 @@ export const useBrowserStore = create(
       set({ bookmarks: [...state.bookmarks, newBookmark] });
       if (uid) {
         try {
-          await setDoc(doc(db, "users", uid, "bookmarks", newId), newBookmark);
+          await setDoc(doc(db, "users", uid, "profiles", fbProfile, "bookmarks", newId), newBookmark);
         } catch (e) { console.error(e); }
       }
     }
@@ -468,10 +667,12 @@ export const useBrowserStore = create(
   
   removeBookmark: async (id) => {
     set((state) => ({ bookmarks: state.bookmarks.filter(b => b.id !== id) }));
-    const uid = get().firebaseUid;
+    const state = get();
+    const uid = state.firebaseUid;
+    const fbProfile = getFbProfile(state);
     if (uid) {
       try {
-        await deleteDoc(doc(db, "users", uid, "bookmarks", id));
+        await deleteDoc(doc(db, "users", uid, "profiles", fbProfile, "bookmarks", id));
       } catch (e) { console.error(e); }
     }
   },
@@ -498,13 +699,20 @@ export const useBrowserStore = create(
         const uid = get().firebaseUid;
         if (uid && result.isLoggedIn && result.currentUser) {
           try {
+            // Sync last login to user root
             await setDoc(doc(db, "users", uid), {
-              name: result.currentUser.name,
-              email: result.currentUser.email,
-              pic: result.currentUser.pic,
               lastLogin: serverTimestamp()
             }, { merge: true });
+            // Sync profile metadata to profile sub-doc
+            const fbProfile = getFbProfile(get());
+            await setDoc(doc(db, "users", uid, "profiles", fbProfile), {
+              name: result.currentUser.name,
+              email: result.currentUser.email,
+              avatar: result.currentUser.pic,
+              timestamp: serverTimestamp()
+            }, { merge: true });
           } catch (e) { console.error("Firestore sync error:", e); }
+          get().syncFirebaseData();
         }
       }
     } catch (e) {
@@ -616,7 +824,7 @@ export const useBrowserStore = create(
 
     }),
     {
-      name: 'browser-storage',
+      name: 'browser-storage-' + currentProfileId,
       partialize: (state) => ({
         history: state.history,
         bookmarks: state.bookmarks,
@@ -631,6 +839,8 @@ export const useBrowserStore = create(
         accounts: state.accounts,
         openRouterApiKey: state.openRouterApiKey,
         firebaseUid: state.firebaseUid,
+        aiChatSessions: state.aiChatSessions,
+        selectedAiModel: state.selectedAiModel,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }
@@ -654,33 +864,7 @@ if (typeof window !== 'undefined') {
     
     if (uid) {
       useBrowserStore.setState({ firebaseUid: uid });
-      // Fetch bookmarks from Firebase and merge/overwrite
-      try {
-        const querySnapshot = await getDocs(collection(db, "users", uid, "bookmarks"));
-        const firebaseBookmarks = [];
-        querySnapshot.forEach((doc) => {
-          firebaseBookmarks.push({ id: doc.id, ...doc.data() });
-        });
-        
-        if (firebaseBookmarks.length > 0) {
-          const currentBookmarks = useBrowserStore.getState().bookmarks || [];
-          const merged = [...currentBookmarks];
-          let changed = false;
-          
-          firebaseBookmarks.forEach(fbBookmark => {
-            if (!merged.find(b => b.url === fbBookmark.url)) {
-              merged.push(fbBookmark);
-              changed = true;
-            }
-          });
-          
-          if (changed || currentBookmarks.length === 0) {
-            useBrowserStore.setState({ bookmarks: merged });
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch bookmarks from Firebase", e);
-      }
+      useBrowserStore.getState().syncFirebaseData();
     }
   });
 }

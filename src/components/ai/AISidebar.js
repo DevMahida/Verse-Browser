@@ -1,21 +1,121 @@
 "use client";
 
-import { X, Sparkles, Send, Settings, BookOpen, FileText, Languages, HelpCircle, List, FileEdit, Zap, Loader2, RotateCcw, PencilLine, Copy, Check, Square } from "lucide-react";
+import {
+  X, Sparkles, Send, BookOpen, FileText, Languages, HelpCircle,
+  List, FileEdit, Zap, Loader2, RotateCcw, PencilLine, Copy, Check,
+  Square, History, Trash2, ChevronDown, MessageSquarePlus, Clock
+} from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 
+// Available OpenRouter models — slugs verified from /api/v1/models (2026-07-13)
+const AI_MODELS = [
+  // ── Meta Llama ──────────────────────────────────────────────
+  { group: "Meta",     label: "Llama 3.1 8B",          value: "meta-llama/llama-3.1-8b-instruct" },
+  { group: "Meta",     label: "Llama 3.1 70B",          value: "meta-llama/llama-3.1-70b-instruct" },
+  { group: "Meta",     label: "Llama 3.3 70B",          value: "meta-llama/llama-3.3-70b-instruct" },
+  { group: "Meta",     label: "Llama 4 Scout",          value: "meta-llama/llama-4-scout" },
+  { group: "Meta",     label: "Llama 4 Maverick",       value: "meta-llama/llama-4-maverick" },
+  // ── Google ──────────────────────────────────────────────────
+  { group: "Google",   label: "Gemini 2.5 Flash",       value: "google/gemini-2.5-flash" },
+  { group: "Google",   label: "Gemini 2.5 Pro",         value: "google/gemini-2.5-pro" },
+  { group: "Google",   label: "Gemma 3 27B",            value: "google/gemma-3-27b-it" },
+  // ── Anthropic ───────────────────────────────────────────────
+  { group: "Anthropic",label: "Claude Sonnet 4.6",      value: "anthropic/claude-sonnet-4.6" },
+  { group: "Anthropic",label: "Claude Haiku 4.5",       value: "anthropic/claude-haiku-4.5" },
+  // ── DeepSeek ────────────────────────────────────────────────
+  { group: "DeepSeek", label: "DeepSeek R1",            value: "deepseek/deepseek-r1" },
+  { group: "DeepSeek", label: "DeepSeek V3 Chat",       value: "deepseek/deepseek-chat-v3-0324" },
+  { group: "DeepSeek", label: "DeepSeek R1 Distill 70B",value: "deepseek/deepseek-r1-distill-llama-70b" },
+  // ── Mistral ─────────────────────────────────────────────────
+  { group: "Mistral",  label: "Mistral Large 2512",     value: "mistralai/mistral-large-2512" },
+  { group: "Mistral",  label: "Mistral Small 3.2 24B",  value: "mistralai/mistral-small-3.2-24b-instruct" },
+  { group: "Mistral",  label: "Mistral Nemo",           value: "mistralai/mistral-nemo" },
+  // ── Qwen ────────────────────────────────────────────────────
+  { group: "Qwen",     label: "Qwen 3 235B",            value: "qwen/qwen3-235b-a22b" },
+  { group: "Qwen",     label: "Qwen 2.5 72B",           value: "qwen/qwen-2.5-72b-instruct" },
+  // ── OpenAI ──────────────────────────────────────────────────
+  { group: "OpenAI",   label: "GPT-4o",                 value: "openai/gpt-4o" },
+  { group: "OpenAI",   label: "GPT-4o Mini",            value: "openai/gpt-4o-mini" },
+];
+
+function formatRelativeTime(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${days}d ago`;
+}
+
 export default function AISidebar() {
-  const { setAISidebarOpen, activeTabId, splitTabId, focusedPane, tabs, openRouterApiKey, setOpenRouterApiKey, aiQueryToExecute, setAiQueryToExecute } = useBrowserStore();
+  const {
+    setAISidebarOpen, activeTabId, splitTabId, focusedPane, tabs,
+    aiQueryToExecute, setAiQueryToExecute,
+    aiChatSessions, currentAiSessionId, selectedAiModel,
+    saveAiSession, deleteAiSession, setCurrentAiSessionId,
+    clearAllAiSessions, setSelectedAiModel,
+  } = useBrowserStore();
+
   const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [targetLang, setTargetLang] = useState("Spanish");
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [view, setView] = useState("chat"); // "chat" | "history"
+  const [showModelMenu, setShowModelMenu] = useState(false);
+
   const messagesEndRef = useRef(null);
   const isProcessingRef = useRef(false);
   const abortControllerRef = useRef(null);
+  const modelMenuRef = useRef(null);
+
+  const selectedModel = AI_MODELS.find(m => m.value === selectedAiModel);
+  const selectedModelLabel = selectedModel?.label || selectedAiModel?.split('/').pop() || "Select Model";
+
+  // Close model menu on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target)) {
+        setShowModelMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  // Auto-save session whenever messages change
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const id = sessionId || `session-${Date.now()}`;
+    if (!sessionId) setSessionId(id);
+    const firstUserMsg = messages.find(m => m.role === "user");
+    const title = firstUserMsg
+      ? firstUserMsg.content.substring(0, 60) + (firstUserMsg.content.length > 60 ? "…" : "")
+      : "New chat";
+    saveAiSession({ id, title, messages, updatedAt: Date.now() });
+    setCurrentAiSessionId(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
+  useEffect(() => {
+    if (aiQueryToExecute) {
+      const query = aiQueryToExecute;
+      setAiQueryToExecute(null);
+      handleChat(query);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiQueryToExecute]);
 
   const handleCopy = (text, idx) => {
     navigator.clipboard.writeText(text);
@@ -30,35 +130,38 @@ export default function AISidebar() {
     }
   };
 
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const startNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setSessionId(null);
+    setCurrentAiSessionId(null);
+    setView("chat");
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const loadSession = (session) => {
+    setMessages(session.messages);
+    setSessionId(session.id);
+    setCurrentAiSessionId(session.id);
+    setView("chat");
+  };
 
-  useEffect(() => {
-    if (aiQueryToExecute) {
-      const query = aiQueryToExecute;
-      setAiQueryToExecute(null);
-      handleChat(query);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiQueryToExecute]);
-
-  const getPageContent = async (type = 'text') => {
-    const tabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
+  const getPageContent = async (type = "text") => {
+    const tabId = focusedPane === "secondary" && splitTabId ? splitTabId : activeTabId;
     if (!window.electron || !window.electron.tabManager) return "";
-    
     try {
-      if (type === 'html') {
-        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'document.documentElement.outerHTML' });
-      } else if (type === 'selected') {
-        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'window.getSelection().toString()' });
+      if (type === "selected") {
+        return await window.electron.tabManager.executeJavaScript({ tabId, code: "window.getSelection().toString()" });
       } else {
-        return await window.electron.tabManager.executeJavaScript({ tabId, code: 'document.body.innerText' });
+        const code = `
+          (function() {
+            var clone = document.body.cloneNode(true);
+            ['script','style','noscript','svg','iframe'].forEach(function(tag) {
+              clone.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+            });
+            return clone.innerText || clone.textContent || '';
+          })()
+        `;
+        return await window.electron.tabManager.executeJavaScript({ tabId, code });
       }
     } catch (e) {
       console.error("Failed to extract page content", e);
@@ -66,125 +169,109 @@ export default function AISidebar() {
     }
   };
 
+  const buildPayload = (extra) => ({ ...extra, model: selectedAiModel });
+
   const handleAction = async (endpoint, actionLabel, extraParams = {}, useSelectedOnly = false) => {
     if (isLoading || isProcessingRef.current) return;
     isProcessingRef.current = true;
     setIsLoading(true);
-    
-    setMessages(prev => [...prev, { role: 'user', content: `Please ${actionLabel.toLowerCase()}` }]);
+    setView("chat");
+    setMessages(prev => [...prev, { role: "user", content: `Please ${actionLabel.toLowerCase()}` }]);
 
     try {
-      const tabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
+      const tabId = focusedPane === "secondary" && splitTabId ? splitTabId : activeTabId;
       const currentTab = tabs?.find(t => t.id === tabId) || {};
-      let content = await getPageContent('selected');
-      
-      // If no text is selected and we don't strictly require it, fallback to the full page text
-      if (!content && !useSelectedOnly) {
-        content = await getPageContent('text');
-      }
-      
+      let content = await getPageContent("selected");
+      if (!content && !useSelectedOnly) content = await getPageContent("text");
+
       if (!content) {
-        setMessages(prev => [...prev, { role: 'assistant', content: useSelectedOnly ? "Please select some text on the page first." : "I couldn't read the content of this page." }]);
-        setIsLoading(false);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: useSelectedOnly ? "Please select some text on the page first." : "I couldn't read the content of this page."
+        }]);
         return;
       }
 
       abortControllerRef.current = new AbortController();
-
-      const res = await fetch(`/api/ai`, {
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortControllerRef.current.signal,
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           endpoint,
-          payload: {
-            text: content.substring(0, 15000), // Send up to 15k chars for safety
-            title: currentTab.title || '',
-            url: currentTab.url || '',
-            api_key: openRouterApiKey || null,
+          payload: buildPayload({
+            text: content.substring(0, 15000),
+            title: currentTab.title || "",
+            url: currentTab.url || "",
             ...extraParams
-          }
+          })
         })
       });
-      
+
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || `Server error: ${res.status}`);
-      }
-      
-      // Handle the various response formats
+      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+
       let responseText = "No response received.";
       if (data.answer) responseText = data.answer;
       else if (data.result) responseText = data.result;
-      else if (data.faqs) {
-        responseText = Array.isArray(data.faqs) ? data.faqs.join('\n\n') : data.faqs;
-      }
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+      else if (data.faqs) responseText = Array.isArray(data.faqs) ? data.faqs.join("\n\n") : data.faqs;
+
+      setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Response stopped." }]);
+      if (err.name === "AbortError") {
+        setMessages(prev => [...prev, { role: "assistant", content: "Response stopped.", model: selectedAiModel }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+        setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err.message}`, model: null }]);
       }
     } finally {
       setIsLoading(false);
+      isProcessingRef.current = false;
     }
   };
 
   const handleChat = async (queryOverride) => {
-    const query = typeof queryOverride === 'string' ? queryOverride.trim() : input.trim();
+    const query = typeof queryOverride === "string" ? queryOverride.trim() : input.trim();
     if (!query || isLoading || isProcessingRef.current) return;
-    
+
     isProcessingRef.current = true;
     setInput("");
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: 'user', content: query }]);
+    setView("chat");
+    setMessages(prev => [...prev, { role: "user", content: query }]);
 
     try {
-      const tabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
+      const tabId = focusedPane === "secondary" && splitTabId ? splitTabId : activeTabId;
       const currentTab = tabs?.find(t => t.id === tabId) || {};
-      const html = await getPageContent('html');
-      const selectedText = await getPageContent('selected');
-      
-      abortControllerRef.current = new AbortController();
+      const pageText = await getPageContent("text");
+      const selectedText = await getPageContent("selected");
 
-      const res = await fetch(`/api/ai`, {
+      abortControllerRef.current = new AbortController();
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortControllerRef.current.signal,
-        body: JSON.stringify({ 
-          endpoint: '/rag',
-          payload: {
-            html: html || "<html><body>No content</body></html>",
-            query: query,
-            chunk_size: 50,
-            overlap: 10,
-            top_k: 3,
-            title: currentTab.title || '',
-            url: currentTab.url || '',
-            selected_text: selectedText || '',
-            api_key: openRouterApiKey || null
-          }
+        body: JSON.stringify({
+          endpoint: "/rag",
+          payload: buildPayload({
+            text: (pageText || "").substring(0, 15000),
+            query,
+            title: currentTab.title || "",
+            url: currentTab.url || "",
+            selected_text: (selectedText || "").substring(0, 2000),
+          })
         })
       });
-      
+
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || `Server error: ${res.status}`);
-      }
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer || data.result || "No response received." }]);
-      isProcessingRef.current = false;
-      setIsLoading(false);
+      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+      setMessages(prev => [...prev, { role: "assistant", content: data.answer || data.result || "No response received.", model: selectedAiModel }]);
     } catch (e) {
-      if (e.name === 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Response stopped." }]);
+      if (e.name === "AbortError") {
+        setMessages(prev => [...prev, { role: "assistant", content: "Response stopped.", model: selectedAiModel }]);
       } else {
-        console.error(e);
-        setMessages(prev => [...prev, { role: 'assistant', content: "An error occurred while connecting to the AI." }]);
+        setMessages(prev => [...prev, { role: "assistant", content: `Error: ${e.message}`, model: null }]);
       }
+    } finally {
       isProcessingRef.current = false;
       setIsLoading(false);
     }
@@ -204,31 +291,102 @@ export default function AISidebar() {
   const suggestedQuestions = [
     "What are the pricing plans?",
     "Where is the refund policy?",
-    "Who is the founder?"
+    "Who is the founder?",
   ];
 
+  // ── HISTORY VIEW ─────────────────────────────────────────────────────────────
+  const HistoryView = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <span className="text-sm font-semibold text-foreground">Chat History</span>
+        {aiChatSessions.length > 0 && (
+          <button
+            onClick={() => { clearAllAiSessions(); }}
+            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors cursor-pointer"
+          >
+            <Trash2 size={12} /> Clear all
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        {aiChatSessions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 space-y-3">
+            <div className="w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center text-accent">
+              <Clock size={22} />
+            </div>
+            <p className="text-sm text-foreground/60">No chat history yet.<br />Start a conversation to see it here.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {aiChatSessions.map((session) => (
+              <div
+                key={session.id}
+                className={`group flex items-start gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors ${currentAiSessionId === session.id ? "bg-accent/8 border-l-2 border-accent" : ""}`}
+                onClick={() => loadSession(session)}
+              >
+                <MessageSquarePlus size={16} className="text-accent/70 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground font-medium truncate">{session.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-foreground/40">{formatRelativeTime(session.updatedAt)}</span>
+                    <span className="text-xs text-foreground/30">·</span>
+                    <span className="text-xs text-foreground/40">{session.messages.length} msgs</span>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteAiSession(session.id); }}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-foreground/40 transition-all cursor-pointer shrink-0"
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── MAIN RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full w-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
         <div className="flex items-center font-medium text-foreground">
           <Sparkles className="w-5 h-5 text-accent mr-2" />
           AI Assistant
         </div>
         <div className="flex items-center space-x-1">
-          {messages.length > 0 && (
-            <button 
-              onClick={() => {
-                setMessages([]);
-                setInput("");
-              }}
-              className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer mr-1"
-              title="New Chat / Back to Actions"
+          {/* New Chat */}
+          <button
+            onClick={startNewChat}
+            className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer"
+            title="New Chat"
+          >
+            <MessageSquarePlus size={16} />
+          </button>
+          {/* History toggle */}
+          <button
+            onClick={() => setView(view === "history" ? "chat" : "history")}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${view === "history" ? "text-accent bg-accent/10" : "text-foreground/70 hover:text-accent"}`}
+            title="Chat History"
+          >
+            <History size={16} />
+          </button>
+          {/* Reset current chat */}
+          {messages.length > 0 && view === "chat" && (
+            <button
+              onClick={startNewChat}
+              className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer"
+              title="Clear Chat"
             >
               <RotateCcw size={16} />
             </button>
           )}
-          <button 
+          {/* Close */}
+          <button
             onClick={() => setAISidebarOpen(false)}
             className="text-foreground/70 hover:text-foreground p-1.5 rounded-md transition-colors cursor-pointer"
             title="Close Sidebar"
@@ -238,39 +396,10 @@ export default function AISidebar() {
         </div>
       </div>
 
-      {/* Scrollable Content */}
+      {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-5 no-scrollbar flex flex-col space-y-6 relative">
-        
-        {showSettings ? (
-          <div className="flex flex-col h-full items-center justify-center text-center space-y-4 animate-[fadeIn_0.2s_ease-out]">
-            <div className="w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center text-accent mb-2">
-              <Settings size={24} />
-            </div>
-            <h3 className="text-lg font-bold text-foreground">API Configuration</h3>
-            <p className="text-sm text-foreground/70 mb-4 px-4">
-              Enter your OpenRouter API key to power the AI assistant. This key is stored locally on your device.
-            </p>
-            <input
-              type="password"
-              placeholder="sk-or-v1-..."
-              value={openRouterApiKey}
-              onChange={(e) => setOpenRouterApiKey(e.target.value)}
-              className="w-full bg-surface border border-border rounded-lg px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
-            />
-            <button
-              onClick={() => setShowSettings(false)}
-              disabled={!openRouterApiKey}
-              className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Save & Continue
-            </button>
-            <button
-              onClick={() => setShowSettings(false)}
-              className="text-xs text-foreground/50 hover:text-foreground/80 cursor-pointer transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+        {view === "history" ? (
+          <HistoryView />
         ) : messages.length === 0 ? (
           <>
             {/* Greeting */}
@@ -281,48 +410,41 @@ export default function AISidebar() {
               </p>
             </div>
 
-            {/* Quick Actions Grid */}
+            {/* Quick Actions */}
             <div>
               <h3 className="text-sm font-medium text-foreground/80 mb-3">Try these actions</h3>
               <div className="grid grid-cols-2 gap-2">
                 {actions.map((action, idx) => (
-                  <button 
+                  <button
                     key={idx}
                     onClick={() => handleAction(action.endpoint, action.label, action.params || {})}
                     disabled={isLoading}
-                    className="flex items-center p-2.5 rounded-lg bg-surface border border-border hover:border-border/60 hover:bg-surface-hover transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center p-2.5 rounded-lg bg-surface border border-border hover:border-border/60 hover:bg-surface-hover transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    <div className="text-accent mr-2.5 group-hover:text-accent-hover transition-colors">
-                      {action.icon}
-                    </div>
+                    <div className="text-accent mr-2.5 group-hover:text-accent-hover transition-colors">{action.icon}</div>
                     <span className="text-xs text-foreground/80 font-medium truncate">{action.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Translation Action */}
+            {/* Translation */}
             <div>
               <h3 className="text-sm font-medium text-foreground/80 mb-3">Translate Selected Text</h3>
               <div className="flex gap-2">
-                <select 
+                <select
                   className="bg-surface border border-border rounded-lg px-2 text-xs text-foreground outline-none w-1/3"
                   value={targetLang}
                   onChange={(e) => setTargetLang(e.target.value)}
-                  title="Select Target Language"
                 >
-                  <option value="Spanish">Spanish</option>
-                  <option value="French">French</option>
-                  <option value="German">German</option>
-                  <option value="Chinese">Chinese</option>
-                  <option value="Japanese">Japanese</option>
-                  <option value="Hindi">Hindi</option>
-                  <option value="English">English</option>
+                  {["Spanish","French","German","Chinese","Japanese","Hindi","English"].map(l => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
                 </select>
                 <button
-                  onClick={() => handleAction('/translate', `Translate to ${targetLang}`, { target_language: targetLang }, true)}
+                  onClick={() => handleAction("/translate", `Translate to ${targetLang}`, { target_language: targetLang }, true)}
                   disabled={isLoading}
-                  className="flex-1 bg-surface border border-border hover:border-border/60 hover:bg-surface-hover text-foreground/80 flex items-center justify-center gap-2 text-xs font-medium py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+                  className="flex-1 bg-surface border border-border hover:border-border/60 hover:bg-surface-hover text-foreground/80 flex items-center justify-center gap-2 text-xs font-medium py-2 rounded-lg transition-colors disabled:opacity-50 cursor-pointer group"
                 >
                   <Languages size={16} className="text-accent group-hover:text-accent-hover transition-colors" />
                   Translate
@@ -330,14 +452,14 @@ export default function AISidebar() {
               </div>
             </div>
 
-            {/* Chat with website */}
+            {/* Suggested Questions */}
             <div>
               <h3 className="text-sm font-medium text-foreground/80 mb-3">Chat with any website</h3>
               <div className="flex flex-col space-y-2">
                 {suggestedQuestions.map((q, idx) => (
-                  <button 
+                  <button
                     key={idx}
-                    onClick={() => { setInput(q); }}
+                    onClick={() => setInput(q)}
                     className="text-left text-sm text-foreground/70 bg-surface hover:bg-surface-hover border border-border px-4 py-2.5 rounded-xl transition-colors w-fit cursor-pointer"
                   >
                     {q}
@@ -349,19 +471,16 @@ export default function AISidebar() {
         ) : (
           <div className="flex flex-col space-y-4">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group/msg relative w-full`}>
-                <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm ${msg.role === 'user' ? 'bg-accent text-white rounded-br-sm whitespace-pre-wrap' : 'bg-surface border border-border text-foreground rounded-bl-sm'}`}>
-                  {msg.role === 'user' ? (
+              <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"} group/msg relative w-full`}>
+                <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm ${msg.role === "user" ? "bg-accent text-white rounded-br-sm whitespace-pre-wrap" : "bg-surface border border-border text-foreground rounded-bl-sm"}`}>
+                  {msg.role === "user" ? (
                     <div className="flex items-start gap-2">
                       <span>{msg.content}</span>
                       {!isLoading && (
                         <button
-                          onClick={() => {
-                            setInput(msg.content);
-                            setMessages([]);
-                          }}
+                          onClick={() => { setInput(msg.content); setMessages([]); }}
                           className="text-white/70 hover:text-white transition-colors cursor-pointer mt-0.5"
-                          title="Edit Search"
+                          title="Edit"
                         >
                           <PencilLine size={14} />
                         </button>
@@ -379,7 +498,7 @@ export default function AISidebar() {
                           h1: ({node, ...props}) => <h1 className="text-lg font-bold my-2" {...props} />,
                           h2: ({node, ...props}) => <h2 className="text-base font-bold my-2" {...props} />,
                           h3: ({node, ...props}) => <h3 className="text-sm font-bold my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
+                          a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
                         }}
                       >
                         {msg.content}
@@ -387,7 +506,7 @@ export default function AISidebar() {
                     </div>
                   )}
                 </div>
-                {msg.role === 'assistant' && !isLoading && (
+                {msg.role === "assistant" && !isLoading && (
                   <div className="flex items-center gap-2 mt-1.5 px-2">
                     <button
                       onClick={() => handleCopy(msg.content, idx)}
@@ -396,6 +515,12 @@ export default function AISidebar() {
                     >
                       {copiedIndex === idx ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                     </button>
+                    {msg.model && (
+                      <span className="flex items-center gap-1 text-[10px] text-foreground/30 bg-surface-hover/50 border border-border/40 rounded-full px-2 py-0.5">
+                        <Sparkles size={9} className="text-accent/50" />
+                        {AI_MODELS.find(m => m.value === msg.model)?.label || msg.model.split("/").pop()}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -411,31 +536,85 @@ export default function AISidebar() {
             <div ref={messagesEndRef} />
           </div>
         )}
-
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-border mt-auto">
+      <div className="p-4 border-t border-border mt-auto shrink-0">
+        {/* Model selector row */}
+        <div className="flex items-center justify-between mb-2 px-1" ref={modelMenuRef}>
+          <span className="text-xs text-foreground/40">Model</span>
+          <div className="relative">
+            <button
+              onClick={() => setShowModelMenu(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-foreground/70 hover:text-accent bg-surface border border-border rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
+            >
+              <Sparkles size={11} className="text-accent" />
+              {selectedModelLabel}
+              <ChevronDown size={11} className={`transition-transform ${showModelMenu ? "rotate-180" : ""}`} />
+            </button>
+
+            {showModelMenu && (
+              <div className="absolute bottom-full right-0 mb-2 w-60 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-[fadeIn_0.15s_ease-out]">
+                <div className="px-3 py-2 border-b border-border">
+                  <span className="text-xs font-semibold text-foreground/50 uppercase tracking-wider">Select Model</span>
+                </div>
+                <div className="overflow-y-auto max-h-72 no-scrollbar">
+                  {(() => {
+                    const groups = [...new Set(AI_MODELS.map(m => m.group))];
+                    return groups.map(group => (
+                      <div key={group}>
+                        <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border/50">
+                          <span className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">{group}</span>
+                        </div>
+                        {AI_MODELS.filter(m => m.group === group).map(m => (
+                          <button
+                            key={m.value}
+                            onClick={() => { setSelectedAiModel(m.value); setShowModelMenu(false); }}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors cursor-pointer flex items-center gap-2 ${
+                              selectedAiModel === m.value
+                                ? "bg-accent/15 text-accent font-semibold"
+                                : "text-foreground/80 hover:bg-surface-hover"
+                            }`}
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${
+                              selectedAiModel === m.value ? "bg-accent scale-125" : "bg-transparent"
+                            }`} />
+                            <span className="truncate">{m.label}</span>
+                            {selectedAiModel === m.value && (
+                              <Check size={11} className="text-accent ml-auto shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Text input */}
         <div className="relative flex items-center bg-surface border border-border rounded-xl focus-within:border-accent/50 p-2 transition-colors">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleChat()}
+            onKeyDown={(e) => e.key === "Enter" && handleChat()}
             disabled={isLoading}
             className="flex-1 bg-transparent border-none focus:outline-none text-sm px-2 text-foreground disabled:opacity-50"
             placeholder="Ask anything about this page..."
           />
           {isLoading ? (
-            <button 
+            <button
               onClick={handleStop}
               className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
-              title="Stop Generating"
+              title="Stop"
             >
               <Square size={16} className="fill-current" />
             </button>
           ) : (
-            <button 
+            <button
               onClick={() => handleChat()}
               disabled={!input.trim()}
               className="p-2 bg-accent/10 hover:bg-accent/20 text-accent rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -445,19 +624,10 @@ export default function AISidebar() {
           )}
         </div>
 
-        {/* Footer Status */}
-        <div className="flex items-center justify-between mt-4 px-2 text-xs text-gray-500">
-          <div className="flex items-center">
-            <div className="w-1.5 h-1.5 rounded-full mr-2 bg-emerald-500" />
-            Backend connected
-          </div>
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="hover:text-foreground transition-colors cursor-pointer"
-            title="Settings"
-          >
-            <Settings size={14} />
-          </button>
+        {/* Footer */}
+        <div className="flex items-center mt-3 px-1 text-xs text-gray-500">
+          <div className="w-1.5 h-1.5 rounded-full mr-2 bg-emerald-500" />
+          AI Ready · {aiChatSessions.length} saved {aiChatSessions.length === 1 ? "chat" : "chats"}
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, session, Menu, screen } = require("electron");
 const path = require("path");
 const { initTabManager } = require('./tabManager');
+const profileManager = require('./profileManager');
 
 const isDev = !app.isPackaged;
 
@@ -16,7 +17,7 @@ let downloadSettings = {
 };
 const activeDownloads = new Map();
 
-function createWindow(initialTab = null, x = undefined, y = undefined, isIncognito = false) {
+function createWindow(initialTab = null, x = undefined, y = undefined, isIncognito = false, profileId = 'main') {
   const options = {
     width: 1200,
     height: 800,
@@ -30,7 +31,7 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
-      partition: 'persist:main'
+      partition: isIncognito ? 'incognito_' + Date.now() : 'persist:' + profileId
     },
   };
   
@@ -39,10 +40,12 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
 
   const win = new BrowserWindow(options);
   win._isIncognito = isIncognito;
+  win._profileId = profileId;
   allWindows.add(win);
 
   let url = "http://localhost:3000";
   const searchParams = new URLSearchParams();
+  searchParams.append('profileId', profileId);
   if (initialTab) {
     searchParams.append('initialTab', JSON.stringify(initialTab));
   }
@@ -96,6 +99,20 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
 
 app.whenReady().then(async () => {
   initTabManager();
+
+  // Profile IPCs
+  ipcMain.handle('get-profiles', () => profileManager.getProfiles());
+  ipcMain.handle('create-profile', (event, { name, email }) => profileManager.createProfile(name, email));
+  ipcMain.handle('delete-profile', (event, id) => profileManager.deleteProfile(id));
+  ipcMain.on('switch-profile', (event, id) => {
+    for (const win of allWindows) {
+      if (win._profileId === id && !win._isIncognito) {
+        win.focus();
+        return;
+      }
+    }
+    createWindow(null, undefined, undefined, false, id);
+  });
 
   // Setup an invisible application menu to handle global shortcuts reliably
   const template = [
@@ -222,12 +239,16 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.on('window-new', () => {
-    createWindow();
+  ipcMain.on('window-new', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const profileId = win ? win._profileId : 'main';
+    createWindow(null, undefined, undefined, false, profileId);
   });
 
-  ipcMain.on('window-new-incognito', () => {
-    createWindow(null, undefined, undefined, true);
+  ipcMain.on('window-new-incognito', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const profileId = win ? win._profileId : 'main';
+    createWindow(null, undefined, undefined, true, profileId);
   });
 
   ipcMain.on('move-window', (event, { dx, dy }) => {
@@ -247,10 +268,12 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('detach-tab', (event, { tabData, isIncognito }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const profileId = win ? win._profileId : 'main';
     const cursorPoint = screen.getCursorScreenPoint();
     const startX = parseInt(Math.round(cursorPoint.x - 100), 10);
     const startY = parseInt(Math.round(cursorPoint.y - 20), 10);
-    createWindow(tabData, startX, startY, isIncognito);
+    createWindow(tabData, startX, startY, isIncognito, profileId);
   });
 
   // Merge handler: receives tabs from source window, sends to target window, closes source
