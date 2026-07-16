@@ -1,4 +1,5 @@
 const { WebContentsView, ipcMain, BrowserWindow } = require('electron');
+const profileManager = require('./profileManager');
 
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
@@ -8,15 +9,20 @@ function initTabManager() {
   if (isInitialized) return;
   isInitialized = true;
   
-  ipcMain.on('tab-create', (event, { tabId, url, partition }) => {
-    console.log(`[TabManager] tab-create ${tabId} url:${url} partition:${partition}`);
+  ipcMain.on('tab-create', (event, { tabId, url }) => {
     if (views.has(tabId)) return;
 
     const sender = event.sender; // The webContents of the requesting window
+    const win = BrowserWindow.fromWebContents(sender);
+    const profileId = win ? win._profileId : 'main';
+    const isIncognito = win ? win._isIncognito : false;
+    const finalPartition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
+    
+    console.log(`[TabManager] tab-create ${tabId} url:${url} partition:${finalPartition}`);
     
     const view = new WebContentsView({
       webPreferences: {
-        partition: partition || 'persist:main',
+        partition: finalPartition,
         contextIsolation: true,
         nodeIntegration: false,
         preload: require('path').join(__dirname, 'tab-preload.js')

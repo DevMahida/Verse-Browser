@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, ipcMain } = require('electron');
 
 class ProfileManager {
   constructor() {
@@ -50,23 +50,29 @@ class ProfileManager {
   }
 
   createProfile(name, email) {
-    // Validate email is provided
-    if (!email || !email.trim()) {
-      return { error: 'Email is required' };
+    if (!name || !name.trim()) {
+      return { error: 'Name is required' };
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    
-    // Check for duplicate email
-    const existing = this.getProfileByEmail(cleanEmail);
-    if (existing) {
-      return { error: 'A profile with this email already exists' };
+    const cleanName = name.trim();
+    let cleanEmail = null;
+    let id;
+
+    if (email && email.trim()) {
+      cleanEmail = email.trim().toLowerCase();
+      // Check for duplicate email if provided
+      const existing = this.getProfileByEmail(cleanEmail);
+      if (existing) {
+        return { error: 'A profile with this email already exists' };
+      }
+      id = cleanEmail;
+    } else {
+      id = `profile_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     }
 
-    const id = cleanEmail; // Use the email directly as the profile ID
     const newProfile = {
       id,
-      name: name || cleanEmail.split('@')[0],
+      name: cleanName,
       email: cleanEmail,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}`,
       timestamp: Date.now()
@@ -91,6 +97,30 @@ class ProfileManager {
     return true;
   }
 
+  updateProfileData(id, data) {
+    const profile = this.profiles.find(p => p.id === id);
+    if (!profile) return false;
+
+    let updated = false;
+    if (data.name && data.name !== profile.name) {
+      profile.name = data.name;
+      updated = true;
+    }
+    if (data.email && data.email !== profile.email) {
+      profile.email = data.email;
+      updated = true;
+    }
+    if (data.avatar && data.avatar !== profile.avatar) {
+      profile.avatar = data.avatar;
+      updated = true;
+    }
+
+    if (updated) {
+      this.saveProfiles(this.profiles);
+    }
+    return updated;
+  }
+
   deleteProfile(id) {
     if (id === 'main') return false; // Cannot delete default profile
     const initialLength = this.profiles.length;
@@ -100,6 +130,36 @@ class ProfileManager {
       return true;
     }
     return false;
+  }
+
+  partitionFor(profileId) {
+    return profileId === 'guest' || !profileId ? 'incognito' : `persist:${profileId}`;
+  }
+
+  ensureDefaultProfile() {
+    let defaultProfile = this.profiles.find(p => p.id === 'main');
+    if (!defaultProfile) {
+      defaultProfile = {
+        id: 'main',
+        name: 'Default',
+        email: null,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=main',
+        timestamp: Date.now()
+      };
+      this.profiles.push(defaultProfile);
+      this.saveProfiles(this.profiles);
+    }
+    return defaultProfile;
+  }
+
+  registerProfileHandlers(openWindowFn) {
+    ipcMain.handle('get-profiles', () => this.getProfiles());
+    ipcMain.handle('create-profile', (event, { name, email }) => this.createProfile(name, email));
+    ipcMain.handle('delete-profile', (event, id) => this.deleteProfile(id));
+    ipcMain.handle('update-profile-data', (event, { id, data }) => this.updateProfileData(id, data));
+    ipcMain.on('switch-profile', (event, id) => {
+      openWindowFn(id, id === 'guest');
+    });
   }
 }
 

@@ -1089,6 +1089,15 @@ const useBrowserStore = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node
                         }
                         get().syncFirebaseData();
                     }
+                    // Sync with local Electron ProfileManager
+                    if (result.isLoggedIn && result.currentUser && window.electron?.updateProfileData) {
+                        const profileId = new URLSearchParams(window.location.search).get('profileId') || 'main';
+                        window.electron.updateProfileData(profileId, {
+                            name: result.currentUser.name,
+                            email: result.currentUser.email,
+                            avatar: result.profilePic
+                        });
+                    }
                 }
             } catch (e) {
                 console.error('Failed to check login state:', e);
@@ -4883,13 +4892,15 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$user$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__User$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/user.mjs [app-client] (ecmascript) <export default as User>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/plus.mjs [app-client] (ecmascript) <export default as Plus>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$log$2d$out$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__LogOut$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/log-out.mjs [app-client] (ecmascript) <export default as LogOut>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$log$2d$in$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__LogIn$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/log-in.mjs [app-client] (ecmascript) <export default as LogIn>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trash$2d$2$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Trash2$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/trash-2.mjs [app-client] (ecmascript) <export default as Trash2>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mail$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Mail$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/mail.mjs [app-client] (ecmascript) <export default as Mail>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$alert$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__AlertCircle$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/circle-alert.mjs [app-client] (ecmascript) <export default as AlertCircle>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$react$2d$icons$2f$fc$2f$index$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/react-icons/fc/index.mjs [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$store$2f$useBrowserStore$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/store/useBrowserStore.js [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zustand$2f$esm$2f$react$2f$shallow$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/zustand/esm/react/shallow.mjs [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature();
+;
+;
 ;
 ;
 ;
@@ -4910,7 +4921,27 @@ function ProfileMenu({ onClose }) {
     const [newProfileName, setNewProfileName] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('');
     const [newProfileEmail, setNewProfileEmail] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('');
     const [error, setError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('');
-    const { currentUser, isIncognitoWindow, openSettingsTab } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$store$2f$useBrowserStore$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useBrowserStore"])();
+    const { currentUser, isLoggedIn, userProfilePic, isIncognitoWindow, addTab, checkLoginState, logoutGoogle, accounts, switchAccount } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$store$2f$useBrowserStore$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useBrowserStore"])((0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zustand$2f$esm$2f$react$2f$shallow$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useShallow"])({
+        "ProfileMenu.useBrowserStore.useShallow": (state)=>({
+                currentUser: state.currentUser,
+                isLoggedIn: state.isLoggedIn,
+                userProfilePic: state.userProfilePic,
+                isIncognitoWindow: state.isIncognitoWindow,
+                addTab: state.addTab,
+                checkLoginState: state.checkLoginState,
+                logoutGoogle: state.logoutGoogle,
+                accounts: state.accounts,
+                switchAccount: state.switchAccount
+            })
+    }["ProfileMenu.useBrowserStore.useShallow"]));
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "ProfileMenu.useEffect": ()=>{
+            // Check login state when menu opens
+            checkLoginState(true);
+        }
+    }["ProfileMenu.useEffect"], [
+        checkLoginState
+    ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ProfileMenu.useEffect": ()=>{
             if (window.electron && window.electron.getProfiles) {
@@ -4922,18 +4953,13 @@ function ProfileMenu({ onClose }) {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     };
     const handleCreateProfile = async ()=>{
-        const email = newProfileEmail.trim();
         const name = newProfileName.trim();
-        if (!email) {
-            setError('Email is required');
-            return;
-        }
-        if (!isValidEmail(email)) {
-            setError('Please enter a valid email address');
+        if (!name) {
+            setError('Name is required');
             return;
         }
         if (!window.electron) return;
-        const result = await window.electron.createProfile(name || email.split('@')[0], email);
+        const result = await window.electron.createProfile(name, '');
         if (result.error) {
             setError(result.error);
             return;
@@ -4964,6 +4990,14 @@ function ProfileMenu({ onClose }) {
             }
         }
     };
+    const handleGoogleSignIn = ()=>{
+        addTab('https://accounts.google.com/ServiceLogin', 'Sign In');
+        onClose();
+    };
+    const handleSignOut = async ()=>{
+        await logoutGoogle();
+        onClose();
+    };
     const handleCancelAdd = ()=>{
         setIsAdding(false);
         setNewProfileName('');
@@ -4982,12 +5016,12 @@ function ProfileMenu({ onClose }) {
                             className: "h-8 w-8 text-foreground/50"
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                            lineNumber: 90,
+                            lineNumber: 114,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 89,
+                        lineNumber: 113,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
@@ -4995,7 +5029,7 @@ function ProfileMenu({ onClose }) {
                         children: "Incognito Mode"
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 92,
+                        lineNumber: 116,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5003,18 +5037,18 @@ function ProfileMenu({ onClose }) {
                         children: "You are browsing privately. Profiles are disabled in Incognito Mode."
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 93,
+                        lineNumber: 117,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                lineNumber: 88,
+                lineNumber: 112,
                 columnNumber: 9
             }, this)
         }, void 0, false, {
             fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-            lineNumber: 87,
+            lineNumber: 111,
             columnNumber: 7
         }, this);
     }
@@ -5032,99 +5066,236 @@ function ProfileMenu({ onClose }) {
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         className: "flex items-center gap-4",
                         children: [
+                            isLoggedIn && userProfilePic ? // eslint-disable-next-line @next/next/no-img-element
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
-                                src: currentUser?.photoURL || currentProfile.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main",
+                                src: userProfilePic,
                                 alt: "Profile",
-                                className: "w-12 h-12 rounded-full border border-border/50 object-cover"
+                                className: "w-14 h-14 rounded-full border-2 border-accent/30 object-cover shadow-md"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 107,
-                                columnNumber: 11
+                                lineNumber: 134,
+                                columnNumber: 13
+                            }, this) : // eslint-disable-next-line @next/next/no-img-element
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
+                                src: currentProfile.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main",
+                                alt: "Profile",
+                                className: "w-14 h-14 rounded-full border border-border/50 object-cover"
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                lineNumber: 141,
+                                columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "flex-1 min-w-0",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                                        className: "font-medium text-base truncate",
-                                        children: currentProfile.name
+                                        className: "font-semibold text-base truncate",
+                                        children: isLoggedIn ? currentUser?.name || 'Google User' : currentProfile.name
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 113,
+                                        lineNumber: 148,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                         className: "text-xs text-foreground/60 truncate",
-                                        children: currentProfile.email || currentUser?.email || "Not signed in"
+                                        children: isLoggedIn ? currentUser?.email || 'Signed in with Google' : 'Not signed in'
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 114,
+                                        lineNumber: 151,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 112,
+                                lineNumber: 147,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 106,
+                        lineNumber: 131,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "mt-4 flex gap-2",
-                        children: !currentUser ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                            onClick: ()=>{
-                                openSettingsTab();
-                                onClose();
-                            },
-                            className: "flex-1 flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-2 rounded-lg text-sm font-medium transition-colors",
+                        className: "mt-4",
+                        children: !isLoggedIn ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                            onClick: handleGoogleSignIn,
+                            className: "w-full flex items-center justify-center gap-2.5 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm border border-gray-200",
                             children: [
-                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$log$2d$in$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__LogIn$3e$__["LogIn"], {
-                                    className: "w-4 h-4"
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$react$2d$icons$2f$fc$2f$index$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["FcGoogle"], {
+                                    size: 18
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                    lineNumber: 126,
+                                    lineNumber: 163,
                                     columnNumber: 15
                                 }, this),
-                                "Sign in to Verse"
+                                "Sign in with Google"
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                            lineNumber: 122,
+                            lineNumber: 159,
                             columnNumber: 13
-                        }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                            onClick: ()=>{
-                                window.electron?.logoutGoogle?.();
-                                onClose();
-                            },
-                            className: "flex-1 flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground py-2 rounded-lg text-sm font-medium transition-colors",
+                        }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            className: "flex gap-2",
                             children: [
-                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$log$2d$out$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__LogOut$3e$__["LogOut"], {
-                                    className: "w-4 h-4"
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                    onClick: ()=>{
+                                        addTab('https://myaccount.google.com', 'Google Account');
+                                        onClose();
+                                    },
+                                    className: "flex-1 flex items-center justify-center gap-2 bg-accent/10 hover:bg-accent/20 text-accent py-2 rounded-lg text-sm font-medium transition-colors",
+                                    children: "Manage Account"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                    lineNumber: 134,
+                                    lineNumber: 168,
                                     columnNumber: 15
                                 }, this),
-                                "Sign out"
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                    onClick: handleSignOut,
+                                    className: "flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/70 hover:text-foreground py-2 px-3 rounded-lg text-sm font-medium transition-colors",
+                                    title: "Sign out",
+                                    children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$log$2d$out$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__LogOut$3e$__["LogOut"], {
+                                        className: "w-4 h-4"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 179,
+                                        columnNumber: 17
+                                    }, this)
+                                }, void 0, false, {
+                                    fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                    lineNumber: 174,
+                                    columnNumber: 15
+                                }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                            lineNumber: 130,
+                            lineNumber: 167,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 120,
+                        lineNumber: 157,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                lineNumber: 105,
+                lineNumber: 130,
                 columnNumber: 7
+            }, this),
+            isLoggedIn && accounts && accounts.length > 1 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                className: "border-b border-border/50",
+                children: [
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
+                        className: "text-xs font-semibold text-foreground/50 uppercase tracking-wider px-4 pt-3 pb-1",
+                        children: "Other Accounts"
+                    }, void 0, false, {
+                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                        lineNumber: 189,
+                        columnNumber: 11
+                    }, this),
+                    accounts.filter((a)=>a.email !== currentUser?.email).map((acc, idx)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                            onClick: ()=>{
+                                switchAccount(acc.email);
+                                onClose();
+                            },
+                            className: "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors cursor-pointer",
+                            children: [
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "w-8 h-8 rounded-full overflow-hidden shrink-0 bg-foreground/10 flex items-center justify-center",
+                                    children: acc.pic ? // eslint-disable-next-line @next/next/no-img-element
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
+                                        src: acc.pic,
+                                        alt: "",
+                                        className: "w-full h-full object-cover"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 204,
+                                        columnNumber: 19
+                                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$user$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__User$3e$__["User"], {
+                                        size: 16,
+                                        className: "text-foreground/70"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 206,
+                                        columnNumber: 19
+                                    }, this)
+                                }, void 0, false, {
+                                    fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                    lineNumber: 201,
+                                    columnNumber: 15
+                                }, this),
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "flex-1 min-w-0 text-left",
+                                    children: [
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                            className: "text-sm text-foreground truncate",
+                                            children: acc.name || 'Account'
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                            lineNumber: 210,
+                                            columnNumber: 17
+                                        }, this),
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                            className: "text-xs text-foreground/50 truncate",
+                                            children: acc.email
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                            lineNumber: 211,
+                                            columnNumber: 17
+                                        }, this)
+                                    ]
+                                }, void 0, true, {
+                                    fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                    lineNumber: 209,
+                                    columnNumber: 15
+                                }, this)
+                            ]
+                        }, idx, true, {
+                            fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                            lineNumber: 193,
+                            columnNumber: 13
+                        }, this)),
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                        onClick: ()=>{
+                            addTab('https://accounts.google.com/AddSession', 'Add Account');
+                            onClose();
+                        },
+                        className: "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors cursor-pointer",
+                        children: [
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                className: "w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border/50",
+                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__["Plus"], {
+                                    className: "w-4 h-4 text-foreground/70"
+                                }, void 0, false, {
+                                    fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                    lineNumber: 220,
+                                    columnNumber: 15
+                                }, this)
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                lineNumber: 219,
+                                columnNumber: 13
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                className: "text-sm text-foreground/80",
+                                children: "Add another account"
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                lineNumber: 222,
+                                columnNumber: 13
+                            }, this)
+                        ]
+                    }, void 0, true, {
+                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                        lineNumber: 215,
+                        columnNumber: 11
+                    }, this)
+                ]
+            }, void 0, true, {
+                fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                lineNumber: 188,
+                columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "p-2",
@@ -5134,7 +5305,7 @@ function ProfileMenu({ onClose }) {
                         children: "Other Profiles"
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 142,
+                        lineNumber: 229,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5149,7 +5320,7 @@ function ProfileMenu({ onClose }) {
                                         className: "w-8 h-8 rounded-full object-cover"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 152,
+                                        lineNumber: 240,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5160,7 +5331,7 @@ function ProfileMenu({ onClose }) {
                                                 children: profile.name
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 154,
+                                                lineNumber: 242,
                                                 columnNumber: 17
                                             }, this),
                                             profile.email && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5168,13 +5339,13 @@ function ProfileMenu({ onClose }) {
                                                 children: profile.email
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 156,
+                                                lineNumber: 244,
                                                 columnNumber: 19
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 153,
+                                        lineNumber: 241,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5185,23 +5356,23 @@ function ProfileMenu({ onClose }) {
                                             className: "w-4 h-4"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                            lineNumber: 164,
+                                            lineNumber: 252,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 159,
+                                        lineNumber: 247,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, profile.id, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 147,
+                                lineNumber: 234,
                                 columnNumber: 13
                             }, this))
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 145,
+                        lineNumber: 232,
                         columnNumber: 9
                     }, this),
                     isAdding ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5213,22 +5384,22 @@ function ProfileMenu({ onClose }) {
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         className: "relative",
                                         children: [
-                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mail$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Mail$3e$__["Mail"], {
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$user$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__User$3e$__["User"], {
                                                 className: "absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/40"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 174,
+                                                lineNumber: 262,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
-                                                type: "email",
+                                                type: "text",
                                                 autoFocus: true,
-                                                value: newProfileEmail,
+                                                value: newProfileName,
                                                 onChange: (e)=>{
-                                                    setNewProfileEmail(e.target.value);
+                                                    setNewProfileName(e.target.value);
                                                     setError('');
                                                 },
-                                                placeholder: "Email address (required)",
+                                                placeholder: "Profile Name (required)",
                                                 className: "w-full bg-background border border-border rounded-md pl-8 pr-3 py-1.5 text-sm outline-none focus:border-primary/50",
                                                 onKeyDown: (e)=>{
                                                     if (e.key === 'Enter') handleCreateProfile();
@@ -5236,28 +5407,13 @@ function ProfileMenu({ onClose }) {
                                                 }
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 175,
+                                                lineNumber: 263,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 173,
-                                        columnNumber: 15
-                                    }, this),
-                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
-                                        type: "text",
-                                        value: newProfileName,
-                                        onChange: (e)=>setNewProfileName(e.target.value),
-                                        placeholder: "Display name (optional)",
-                                        className: "w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-primary/50",
-                                        onKeyDown: (e)=>{
-                                            if (e.key === 'Enter') handleCreateProfile();
-                                            if (e.key === 'Escape') handleCancelAdd();
-                                        }
-                                    }, void 0, false, {
-                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 188,
+                                        lineNumber: 261,
                                         columnNumber: 15
                                     }, this),
                                     error && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5267,26 +5423,26 @@ function ProfileMenu({ onClose }) {
                                                 className: "w-3 h-3 shrink-0"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 201,
+                                                lineNumber: 278,
                                                 columnNumber: 19
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 children: error
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                                lineNumber: 202,
+                                                lineNumber: 279,
                                                 columnNumber: 19
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 200,
+                                        lineNumber: 277,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 172,
+                                lineNumber: 260,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5294,12 +5450,12 @@ function ProfileMenu({ onClose }) {
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                                         onClick: handleCreateProfile,
-                                        disabled: !newProfileEmail.trim(),
+                                        disabled: !newProfileName.trim(),
                                         className: "flex-1 bg-primary text-primary-foreground py-1.5 rounded-md text-xs font-medium disabled:opacity-50",
                                         children: "Add"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 207,
+                                        lineNumber: 284,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5308,66 +5464,107 @@ function ProfileMenu({ onClose }) {
                                         children: "Cancel"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                        lineNumber: 214,
+                                        lineNumber: 291,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 206,
+                                lineNumber: 283,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 171,
+                        lineNumber: 259,
                         columnNumber: 11
-                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                        onClick: ()=>setIsAdding(true),
-                        className: "w-full mt-1 flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-lg cursor-pointer transition-colors text-foreground/80 hover:text-foreground",
+                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        className: "space-y-1 mt-1",
                         children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border/50",
-                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__["Plus"], {
-                                    className: "w-4 h-4"
-                                }, void 0, false, {
-                                    fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                    lineNumber: 228,
-                                    columnNumber: 15
-                                }, this)
-                            }, void 0, false, {
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                onClick: ()=>setIsAdding(true),
+                                className: "w-full flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-lg cursor-pointer transition-colors text-foreground/80 hover:text-foreground",
+                                children: [
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                        className: "w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border/50",
+                                        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__["Plus"], {
+                                            className: "w-4 h-4"
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                            lineNumber: 306,
+                                            columnNumber: 17
+                                        }, this)
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 305,
+                                        columnNumber: 15
+                                    }, this),
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        className: "text-sm font-medium",
+                                        children: "Add Profile"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 308,
+                                        columnNumber: 15
+                                    }, this)
+                                ]
+                            }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 227,
+                                lineNumber: 301,
                                 columnNumber: 13
                             }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                className: "text-sm font-medium",
-                                children: "Add Profile"
-                            }, void 0, false, {
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                onClick: ()=>handleSwitchProfile('guest'),
+                                className: "w-full flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-lg cursor-pointer transition-colors text-foreground/80 hover:text-foreground",
+                                children: [
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                        className: "w-8 h-8 rounded-full bg-muted flex items-center justify-center border border-border/50",
+                                        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$user$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__User$3e$__["User"], {
+                                            className: "w-4 h-4"
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                            lineNumber: 315,
+                                            columnNumber: 17
+                                        }, this)
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 314,
+                                        columnNumber: 15
+                                    }, this),
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                        className: "text-sm font-medium",
+                                        children: "Guest Mode"
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/ProfileMenu.js",
+                                        lineNumber: 317,
+                                        columnNumber: 15
+                                    }, this)
+                                ]
+                            }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                                lineNumber: 230,
+                                lineNumber: 310,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                        lineNumber: 223,
+                        lineNumber: 300,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-                lineNumber: 141,
+                lineNumber: 228,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/toolbar/ProfileMenu.js",
-        lineNumber: 104,
+        lineNumber: 128,
         columnNumber: 5
     }, this);
 }
-_s(ProfileMenu, "Zc8q8G4LRpCfPfOlcv7MesWMyu4=", false, function() {
+_s(ProfileMenu, "3JCLqhFiBo2WAh8fPi/P8+D7Fjo=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$store$2f$useBrowserStore$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useBrowserStore"]
     ];
@@ -5473,6 +5670,8 @@ function NavigationBar() {
     const [showProfileMenu, setShowProfileMenu] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [downloadAnimate, setDownloadAnimate] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [downloadJustFinished, setDownloadJustFinished] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
+    const [profiles, setProfiles] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
+    const [currentProfileId, setCurrentProfileId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('main');
     const prevCompletedCount = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(0);
     const { suggestions } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$hooks$2f$useSearchSuggestions$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchSuggestions"])(inputValue);
     const overflowMenuRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
@@ -5480,6 +5679,30 @@ function NavigationBar() {
     const historyRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const downloadsRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const profileRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "NavigationBar.useEffect": ()=>{
+            if ("TURBOPACK compile-time truthy", 1) {
+                const params = new URLSearchParams(window.location.search);
+                setCurrentProfileId(params.get('profileId') || 'main');
+            }
+        }
+    }["NavigationBar.useEffect"], []);
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "NavigationBar.useEffect": ()=>{
+            if (window.electron && window.electron.getProfiles) {
+                window.electron.getProfiles().then(setProfiles).catch(console.error);
+                // Also poll for profile updates periodically in case we updated the name/email via Google Login
+                const interval = setInterval({
+                    "NavigationBar.useEffect.interval": ()=>{
+                        window.electron.getProfiles().then(setProfiles).catch(console.error);
+                    }
+                }["NavigationBar.useEffect.interval"], 5000);
+                return ({
+                    "NavigationBar.useEffect": ()=>clearInterval(interval)
+                })["NavigationBar.useEffect"];
+            }
+        }
+    }["NavigationBar.useEffect"], []);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "NavigationBar.useEffect": ()=>{
             const handleClickOutside = {
@@ -5648,7 +5871,7 @@ function NavigationBar() {
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$toolbar$2f$PermissionPrompt$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {}, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 207,
+                        lineNumber: 228,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5659,12 +5882,12 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 216,
+                            lineNumber: 237,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 208,
+                        lineNumber: 229,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5675,12 +5898,12 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 226,
+                            lineNumber: 247,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 218,
+                        lineNumber: 239,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5691,18 +5914,18 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 233,
+                            lineNumber: 254,
                             columnNumber: 35
                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$rotate$2d$cw$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__RotateCw$3e$__["RotateCw"], {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 233,
+                            lineNumber: 254,
                             columnNumber: 53
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 228,
+                        lineNumber: 249,
                         columnNumber: 9
                     }, this),
                     showHomeButton && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5713,18 +5936,18 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 241,
+                            lineNumber: 262,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 236,
+                        lineNumber: 257,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                lineNumber: 206,
+                lineNumber: 227,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5741,7 +5964,7 @@ function NavigationBar() {
                                         className: "mr-2 opacity-80 grayscale-[20%] hover:grayscale-0 transition-all"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 250,
+                                        lineNumber: 271,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5752,12 +5975,12 @@ function NavigationBar() {
                                             size: 14
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                            lineNumber: 256,
+                                            lineNumber: 277,
                                             columnNumber: 15
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 251,
+                                        lineNumber: 272,
                                         columnNumber: 13
                                     }, this),
                                     showSiteSettings && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$toolbar$2f$SiteSettingsPopup$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -5765,13 +5988,13 @@ function NavigationBar() {
                                         onClose: ()=>setShowSiteSettings(false)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 259,
+                                        lineNumber: 280,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 249,
+                                lineNumber: 270,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -5786,7 +6009,7 @@ function NavigationBar() {
                                 placeholder: "Ask Google or type a URL"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 265,
+                                lineNumber: 286,
                                 columnNumber: 11
                             }, this),
                             zoomPercentage !== 100 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5803,12 +6026,12 @@ function NavigationBar() {
                                             size: 12
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                            lineNumber: 283,
+                                            lineNumber: 304,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 278,
+                                        lineNumber: 299,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5824,7 +6047,7 @@ function NavigationBar() {
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 285,
+                                        lineNumber: 306,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5838,18 +6061,18 @@ function NavigationBar() {
                                             size: 12
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                            lineNumber: 297,
+                                            lineNumber: 318,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 292,
+                                        lineNumber: 313,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 277,
+                                lineNumber: 298,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5861,18 +6084,18 @@ function NavigationBar() {
                                     className: isBookmarked ? "fill-current" : ""
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                    lineNumber: 311,
+                                    lineNumber: 332,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 301,
+                                lineNumber: 322,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 248,
+                        lineNumber: 269,
                         columnNumber: 9
                     }, this),
                     isFocused && suggestions.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$common$2f$SuggestionsDropdown$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -5885,13 +6108,13 @@ function NavigationBar() {
                         className: "top-full mt-2 left-0 w-full"
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 315,
+                        lineNumber: 336,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                lineNumber: 247,
+                lineNumber: 268,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5921,7 +6144,7 @@ function NavigationBar() {
                                                 strokeWidth: "2.5"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                                lineNumber: 342,
+                                                lineNumber: 363,
                                                 columnNumber: 19
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("circle", {
@@ -5936,13 +6159,13 @@ function NavigationBar() {
                                                 strokeLinecap: "round"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                                lineNumber: 343,
+                                                lineNumber: 364,
                                                 columnNumber: 19
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 341,
+                                        lineNumber: 362,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$download$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Download$3e$__["Download"], {
@@ -5950,26 +6173,26 @@ function NavigationBar() {
                                         className: activeDownload ? "text-accent" : ""
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 354,
+                                        lineNumber: 375,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 331,
+                                lineNumber: 352,
                                 columnNumber: 13
                             }, this),
                             showDownloadsPopup && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$toolbar$2f$DownloadsPopup$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                                 onClose: ()=>setShowDownloadsPopup(false)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 356,
+                                lineNumber: 377,
                                 columnNumber: 36
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 330,
+                        lineNumber: 351,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -5981,12 +6204,12 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 365,
+                            lineNumber: 386,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 359,
+                        lineNumber: 380,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6001,7 +6224,7 @@ function NavigationBar() {
                                         size: 16
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 375,
+                                        lineNumber: 396,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6009,13 +6232,13 @@ function NavigationBar() {
                                         children: "Incognito"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                        lineNumber: 376,
+                                        lineNumber: 397,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 371,
+                                lineNumber: 392,
                                 columnNumber: 13
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                                 onClick: ()=>setShowProfileMenu(!showProfileMenu),
@@ -6026,39 +6249,54 @@ function NavigationBar() {
                                     className: "w-full h-full rounded-full object-cover"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                    lineNumber: 384,
+                                    lineNumber: 405,
+                                    columnNumber: 17
+                                }, this) : currentProfileId !== 'guest' ? // eslint-disable-next-line @next/next/no-img-element
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
+                                    src: profiles.find((p)=>p.id === currentProfileId)?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main",
+                                    alt: "Profile",
+                                    className: "w-full h-full rounded-full object-cover border border-border/50 bg-background"
+                                }, void 0, false, {
+                                    fileName: "[project]/src/components/toolbar/NavigationBar.js",
+                                    lineNumber: 408,
                                     columnNumber: 17
                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                     className: "w-full h-full rounded-full bg-accent/20 flex items-center justify-center text-accent",
-                                    children: currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'
+                                    children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(User, {
+                                        size: 16
+                                    }, void 0, false, {
+                                        fileName: "[project]/src/components/toolbar/NavigationBar.js",
+                                        lineNumber: 415,
+                                        columnNumber: 19
+                                    }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                    lineNumber: 386,
+                                    lineNumber: 414,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 379,
+                                lineNumber: 400,
                                 columnNumber: 13
                             }, this),
                             showProfileMenu && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$toolbar$2f$ProfileMenu$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                                 onClose: ()=>setShowProfileMenu(false)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                                lineNumber: 392,
+                                lineNumber: 420,
                                 columnNumber: 31
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 369,
+                        lineNumber: 390,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         className: "w-px h-5 bg-border mx-1"
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 396,
+                        lineNumber: 424,
                         columnNumber: 9
                     }, this),
                     splitTabId && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -6068,7 +6306,7 @@ function NavigationBar() {
                         children: "Close Split"
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 400,
+                        lineNumber: 428,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -6079,12 +6317,12 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 414,
+                            lineNumber: 442,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 409,
+                        lineNumber: 437,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -6096,39 +6334,39 @@ function NavigationBar() {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 422,
+                            lineNumber: 450,
                             columnNumber: 31
                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$moon$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Moon$3e$__["Moon"], {
                             size: 18
                         }, void 0, false, {
                             fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                            lineNumber: 422,
+                            lineNumber: 450,
                             columnNumber: 51
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 416,
+                        lineNumber: 444,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$toolbar$2f$BrowserMenu$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {}, void 0, false, {
                         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                        lineNumber: 426,
+                        lineNumber: 454,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/toolbar/NavigationBar.js",
-                lineNumber: 328,
+                lineNumber: 349,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/toolbar/NavigationBar.js",
-        lineNumber: 204,
+        lineNumber: 225,
         columnNumber: 5
     }, this);
 }
-_s(NavigationBar, "WMqDIzG40RFDIAXWEGAU75WNUFI=", false, function() {
+_s(NavigationBar, "JRHljdP23kYzlvUnZ0N0ZY2eZJU=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$store$2f$useBrowserStore$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useBrowserStore"],
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$hooks$2f$useSearchSuggestions$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchSuggestions"]

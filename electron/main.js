@@ -44,7 +44,7 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      partition: isIncognito ? 'incognito_' + Date.now() : 'persist:' + profileId
+      partition: isIncognito ? 'incognito' : profileManager.partitionFor(profileId)
     },
   };
 
@@ -180,9 +180,17 @@ app.whenReady().then(async () => {
   initTabManager();
 
   // Profile IPCs
-  ipcMain.handle('get-profiles', () => profileManager.getProfiles());
-  ipcMain.handle('create-profile', (event, { name, email }) => profileManager.createProfile(name, email));
-  ipcMain.handle('delete-profile', (event, id) => profileManager.deleteProfile(id));
+  profileManager.registerProfileHandlers((profileId, isGuest) => {
+    if (!isGuest) {
+      for (const win of allWindows) {
+        if (win._profileId === profileId && !win._isIncognito) {
+          win.focus();
+          return;
+        }
+      }
+    }
+    createWindow(null, undefined, undefined, isGuest, profileId);
+  });
   
   // Session IPCs
   ipcMain.on('clear-browsing-data', async () => {
@@ -193,15 +201,7 @@ app.whenReady().then(async () => {
       console.error('Failed to clear browsing data:', err);
     }
   });
-  ipcMain.on('switch-profile', (event, id) => {
-    for (const win of allWindows) {
-      if (win._profileId === id && !win._isIncognito) {
-        win.focus();
-        return;
-      }
-    }
-    createWindow(null, undefined, undefined, false, id);
-  });
+  // switch-profile is now handled by profileManager.registerProfileHandlers
 
   // Setup an invisible application menu to handle global shortcuts reliably
   const template = [
@@ -301,7 +301,8 @@ app.whenReady().then(async () => {
     // but WebContentsView handles its own window open in tabManager.js.
   });
 
-  createWindow();
+  const defaultProfile = profileManager.ensureDefaultProfile();
+  createWindow(null, undefined, undefined, false, defaultProfile.id);
 
   ipcMain.on('window-minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -402,7 +403,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('check-google-login', async (event, force = false) => {
     try {
-      const sess = session.fromPartition('persist:main');
+      // Find the window that requested this check to use the correct partition
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const profileId = win ? win._profileId : 'main';
+      const partitionStr = profileManager.partitionFor(profileId);
+      const sess = session.fromPartition(partitionStr);
       const cookies = await sess.cookies.get({ domain: '.google.com' });
       const sidCookie = cookies.find(c => c.name === 'SID' || c.name === '__Secure-1PSID' || c.name === '__Secure-3PSID');
       
@@ -431,7 +436,7 @@ app.whenReady().then(async () => {
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            partition: 'persist:main'
+            partition: partitionStr
           }
         });
 
@@ -507,12 +512,16 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.handle('logout-google', async () => {
+  ipcMain.handle('logout-google', async (event) => {
     try {
-      const cookies = await session.defaultSession.cookies.get({ domain: '.google.com' });
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const profileId = win ? win._profileId : 'main';
+      const sess = session.fromPartition(profileManager.partitionFor(profileId));
+      
+      const cookies = await sess.cookies.get({ domain: '.google.com' });
       for (const cookie of cookies) {
         let url = 'http' + (cookie.secure ? 's' : '') + '://' + cookie.domain.replace(/^\./, '') + cookie.path;
-        await session.defaultSession.cookies.remove(url, cookie.name);
+        await sess.cookies.remove(url, cookie.name);
       }
       cachedGoogleAccounts = null;
       lastSid = null;

@@ -803,6 +803,16 @@ export const useBrowserStore = create(
           } catch (e) { console.error("Firestore sync error:", e); }
           get().syncFirebaseData();
         }
+
+        // Sync with local Electron ProfileManager
+        if (result.isLoggedIn && result.currentUser && window.electron?.updateProfileData) {
+          const profileId = new URLSearchParams(window.location.search).get('profileId') || 'main';
+          window.electron.updateProfileData(profileId, {
+            name: result.currentUser.name,
+            email: result.currentUser.email,
+            avatar: result.profilePic
+          });
+        }
       }
     } catch (e) {
       console.error('Failed to check login state:', e);

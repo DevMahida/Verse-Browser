@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("electron", {
   createProfile: (name, email) => ipcRenderer.invoke('create-profile', { name, email }),
   switchProfile: (id) => ipcRenderer.send('switch-profile', id),
   deleteProfile: (id) => ipcRenderer.invoke('delete-profile', id),
+  updateProfileData: (id, data) => ipcRenderer.invoke('update-profile-data', { id, data }),
   
   // Theme Management
   themeAPI: {

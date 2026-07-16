@@ -56,6 +56,8 @@ export default function NavigationBar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [downloadAnimate, setDownloadAnimate] = useState(false);
   const [downloadJustFinished, setDownloadJustFinished] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [currentProfileId, setCurrentProfileId] = useState('main');
   const prevCompletedCount = useRef(0);
   const { suggestions } = useSearchSuggestions(inputValue);
   const overflowMenuRef = useRef(null);
@@ -63,6 +65,25 @@ export default function NavigationBar() {
   const historyRef = useRef(null);
   const downloadsRef = useRef(null);
   const profileRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setCurrentProfileId(params.get('profileId') || 'main');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (window.electron && window.electron.getProfiles) {
+      window.electron.getProfiles().then(setProfiles).catch(console.error);
+      
+      // Also poll for profile updates periodically in case we updated the name/email via Google Login
+      const interval = setInterval(() => {
+        window.electron.getProfiles().then(setProfiles).catch(console.error);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -382,9 +403,16 @@ export default function NavigationBar() {
             >
               {userProfilePic ? (
                 <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
+              ) : currentProfileId !== 'guest' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img 
+                  src={profiles.find(p => p.id === currentProfileId)?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main"} 
+                  alt="Profile" 
+                  className="w-full h-full rounded-full object-cover border border-border/50 bg-background"
+                />
               ) : (
                 <div className="w-full h-full rounded-full bg-accent/20 flex items-center justify-center text-accent">
-                  {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
+                  <User size={16} />
                 </div>
               )}
             </button>
