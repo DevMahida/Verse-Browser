@@ -5,6 +5,7 @@ import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
 import Homepage from "../homepage/Homepage";
 import HistoryPage from "./HistoryPage";
+import BookmarksPage from "./BookmarksPage";
 import DownloadsPage from "./DownloadsPage";
 import ExtensionsPage from "./ExtensionsPage";
 import ExtensionStorePage from "./ExtensionStorePage";
@@ -12,12 +13,12 @@ import SettingsPage from "./SettingsPage";
 
 function TabWebview({ tab, isActive, onFocus, styleClass }) {
   const containerRef = useRef(null);
-  const { updateTab, updateFindState, addToHistory, updateHistoryTitle, checkLoginState, dropdownOffset, isIncognitoWindow } = useBrowserStore(
+  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, dropdownOffset, isIncognitoWindow } = useBrowserStore(
     useShallow((state) => ({
       updateTab: state.updateTab,
       updateFindState: state.updateFindState,
       addToHistory: state.addToHistory,
-      updateHistoryTitle: state.updateHistoryTitle,
+      updateHistoryMeta: state.updateHistoryMeta,
       checkLoginState: state.checkLoginState,
       dropdownOffset: state.dropdownOffset,
       isIncognitoWindow: state.isIncognitoWindow,
@@ -44,7 +45,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       isMounted.current = false;
       window.electron.tabManager.destroy(tab.id);
     };
-  }, [tab.id, initialUrl]);
+  }, [tab.id, initialUrl, isIncognitoWindow]);
 
   // 2. Event Listener
   useEffect(() => {
@@ -61,10 +62,13 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
           break;
         case 'page-title-updated':
           updateTab(tab.id, { title: data.title });
-          if (!isIncognitoWindow) updateHistoryTitle(internalUrl.current, data.title);
+          if (!isIncognitoWindow) updateHistoryMeta(internalUrl.current, { title: data.title });
           break;
         case 'page-favicon-updated':
-          if (data.favicons && data.favicons.length > 0) updateTab(tab.id, { favicon: data.favicons[0] });
+          if (data.favicons && data.favicons.length > 0) {
+            updateTab(tab.id, { favicon: data.favicons[0] });
+            if (!isIncognitoWindow) updateHistoryMeta(internalUrl.current, { favicon: data.favicons[0] });
+          }
           break;
         case 'did-start-loading':
           updateTab(tab.id, { isLoading: true, error: null });
@@ -95,7 +99,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       }
     });
     return cleanup;
-  }, [tab.id, updateTab, addToHistory, updateHistoryTitle, checkLoginState]);
+  }, [tab.id, updateTab, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, updateFindState]);
 
   // 3. Bounds & Visibility
   useEffect(() => {
@@ -149,7 +153,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       });
     }
     return () => { active = false; };
-  }, [dropdownOffset, tab.id]);
+  }, [dropdownOffset, tab.id, tab.zoomLevel]);
 
   // 4. Remote Navigation
   useEffect(() => {
@@ -211,7 +215,11 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       >
         {screenshotUrl && dropdownOffset > 0 && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={screenshotUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <img 
+            src={screenshotUrl} 
+            alt="" 
+            className="absolute inset-0 w-full h-full object-cover"
+          />
         )}
       </div>
     </div>
@@ -291,6 +299,18 @@ export default function WebviewContainer() {
               className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
             >
               <HistoryPage />
+            </div>
+          );
+        }
+
+        if (tab.url === 'browser://bookmarks') {
+          return (
+            <div 
+              key={tab.id} 
+              onClick={handleClick}
+              className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
+            >
+              <BookmarksPage />
             </div>
           );
         }

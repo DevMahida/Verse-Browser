@@ -42,7 +42,7 @@ const recentItems = [
 
 export default function RecentTabs() {
   return (
-    <div className="w-full max-w-5xl mx-auto px-6">
+    <div className="w-full max-w-5xl mx-auto px-6 pb-8 shrink-0">
       <h2 className="text-foreground font-medium mb-4 text-lg tracking-wide">Continue where you left off</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

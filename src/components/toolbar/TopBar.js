@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, User, LogOut, LogIn, MoreVertical, Settings, History, Download, Volume2, VolumeX } from "lucide-react";
+import { X, Plus, User, LogOut, LogIn, MoreVertical, Settings, History, Download, Volume2, VolumeX, ChevronDown } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useBrowserStore } from "@/store/useBrowserStore";
@@ -148,7 +148,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
         }
       }}
       className={clsx(
-        "group flex items-center h-8 rounded-t-lg cursor-pointer border-t border-x transition-colors shrink-0",
+        "group flex items-center h-8 rounded-t-xl cursor-pointer border-t border-x transition-colors shrink-0",
         "no-drag-region", // Always no-drag-region natively, so we can intercept right clicks
         isActive 
           ? "bg-surface border-surface-hover text-foreground" 
@@ -382,6 +382,14 @@ export default function TopBar() {
         <span className="text-sm font-semibold tracking-wide">Verse</span>
       </div>
 
+      {/* Tab Search */}
+      <button 
+        aria-label="Search Tabs"
+        className="h-8 w-8 flex items-center justify-center hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px no-drag-region focus-visible:ring-2 focus-visible:outline-none rounded-md"
+      >
+        <ChevronDown size={16} />
+      </button>
+
       {/* Tabs */}
       <div 
         className="flex-1 flex items-end space-x-1 overflow-x-auto no-scrollbar"
@@ -438,120 +446,8 @@ export default function TopBar() {
         </button>
       </div>
 
-      {/* Profile & Window Controls */}
+      {/* Window Controls */}
       <div className="flex items-center h-full text-foreground/70 space-x-2 relative no-drag-region" ref={menuRef}>
-        {/* Profile Button */}
-        <button
-          onClick={() => {
-            if (!showProfileMenu) checkLoginState(true);
-            setShowProfileMenu(!showProfileMenu);
-          }}
-          aria-label="Profile Menu"
-          className="relative before:absolute before:-inset-2 before:content-[''] h-7 w-7 flex items-center justify-center rounded-full hover:bg-foreground/10 transition-colors border border-transparent hover:border-border overflow-hidden focus-visible:ring-2 focus-visible:outline-none"
-          title="Profile"
-        >
-          {isLoggedIn ? (
-            userProfilePic ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={userProfilePic} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-green-500/20 text-green-500 flex items-center justify-center">
-                <User size={14} className="fill-current" />
-              </div>
-            )
-          ) : (
-            <User size={14} />
-          )}
-        </button>
-
-        {showProfileMenu && (
-          <div className="absolute right-2 top-full mt-2 w-72 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-100 flex flex-col font-sans">
-            <div className="px-4 py-6 text-center border-b border-border bg-surface">
-              <div className="mx-auto w-16 h-16 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center mb-3 overflow-hidden">
-                 {currentUser?.pic ? (
-                   // eslint-disable-next-line @next/next/no-img-element
-                   <img src={currentUser.pic} alt="Profile" className="w-full h-full object-cover" />
-                 ) : (
-                   <User size={32} className="fill-current" />
-                 )}
-              </div>
-              <p className="text-base font-medium text-foreground truncate px-2">
-                {isLoggedIn ? (currentUser?.name || "Current Account") : "Not signed in"}
-              </p>
-              <p className="text-sm text-foreground/70 mt-1 truncate px-2">
-                {isLoggedIn ? (currentUser?.email || "Synced with browser") : "Sign in to sync your tabs"}
-              </p>
-              {!isLoggedIn && (
-                <button
-                  onClick={() => {
-                    addTab('https://accounts.google.com/ServiceLogin', 'Sign In');
-                    setShowProfileMenu(false);
-                  }}
-                  className="mt-4 bg-accent hover:bg-accent-hover text-white px-6 py-2 rounded-full font-medium transition-colors text-sm"
-                >
-                  Sign in
-                </button>
-              )}
-            </div>
-            
-            {isLoggedIn && accounts && accounts.length > 1 && (
-              <div className="border-b border-border bg-surface">
-                {accounts.filter(a => a.email !== currentUser?.email).map((acc, idx) => (
-                  <button 
-                    key={idx} 
-                    onClick={() => {
-                      switchAccount(acc.email);
-                      setShowProfileMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-foreground/10 flex items-center transition-colors cursor-pointer border-none"
-                  >
-                    <div className="w-8 h-8 rounded-full overflow-hidden mr-3 shrink-0 bg-foreground/10 flex items-center justify-center">
-                      {acc.pic ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={acc.pic} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <User size={16} className="text-foreground/70" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{acc.name || 'Account'}</p>
-                      <p className="text-xs text-foreground/70 truncate">{acc.email}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {isLoggedIn && (
-              <div className="p-2 space-y-1 bg-surface">
-                <button
-                  onClick={() => {
-                    addTab('https://accounts.google.com/AddSession', 'Add Account');
-                    setShowProfileMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-foreground/90 hover:bg-foreground/10 rounded-lg flex items-center transition-colors"
-                >
-                  <Plus size={16} className="mr-3 text-foreground/70" />
-                  Add account
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    setShowLogoutModal(true);
-                  }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-foreground/90 hover:bg-foreground/10 rounded-lg flex items-center transition-colors"
-                >
-                  <LogOut size={16} className="mr-3 text-foreground/70" />
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-
-
         <div className="flex items-center h-full space-x-0 ml-2">
           <button 
             onClick={() => window.electron?.minimize?.()}

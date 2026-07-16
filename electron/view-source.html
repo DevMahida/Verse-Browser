@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>View Source</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      background-color: #ffffff;
+      color: #333333;
+    }
+    
+    .header {
+      background: #f0f0f0;
+      padding: 10px 15px;
+      border-bottom: 1px solid #ccc;
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      z-index: 10;
+    }
+
+    .header label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #source-container {
+      padding: 10px;
+      white-space: pre;
+      word-break: normal;
+      overflow-x: auto;
+    }
+
+    body.wrap #source-container {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Syntax Highlighting */
+    .tag { color: #881280; }
+    .attr { color: #994500; }
+    .string { color: #1a1aa6; }
+    .comment { color: #236e25; font-style: italic; }
+
+    /* Line Numbers */
+    table.code-table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    td.line-num {
+      padding-right: 10px;
+      text-align: right;
+      color: #999;
+      user-select: none;
+      width: 40px;
+      vertical-align: top;
+      border-right: 1px solid #ddd;
+    }
+    td.line-code {
+      padding-left: 10px;
+      vertical-align: top;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <label>
+      <input type="checkbox" id="wrap-toggle">
+      Line wrap
+    </label>
+    <span id="status">Loading...</span>
+  </div>
+  
+  <div id="source-container"></div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetUrl = urlParams.get('url');
+    const partition = urlParams.get('partition');
+    
+    document.title = `view-source:${targetUrl}`;
+
+    const wrapToggle = document.getElementById('wrap-toggle');
+    wrapToggle.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        document.body.classList.add('wrap');
+      } else {
+        document.body.classList.remove('wrap');
+      }
+    });
+
+    window.receiveSource = function(source) {
+      document.getElementById('status').innerText = '';
+      
+      // Save raw text securely for the "Save as" context menu action
+      window.__rawSource = source;
+      
+      // Escape HTML
+      let escaped = source
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+      // Basic Regex Highlighting
+      escaped = escaped.replace(/&quot;(.*?)&quot;/g, '<span class="string">&quot;$1&quot;</span>');
+      escaped = escaped.replace(/&#039;(.*?)&#039;/g, '<span class="string">&#039;$1&#039;</span>');
+      escaped = escaped.replace(/&lt;(\/?[a-zA-Z0-9\-:]+)/g, '&lt;<span class="tag">$1</span>');
+      escaped = escaped.replace(/&gt;/g, '<span class="tag">&gt;</span>');
+
+      const lines = escaped.split('\n');
+      
+      // Chunk rendering to avoid freezing UI
+      const container = document.getElementById('source-container');
+      const table = document.createElement('table');
+      table.className = 'code-table';
+      const tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      const chunkSize = 500;
+      let index = 0;
+
+      function renderChunk() {
+        const end = Math.min(index + chunkSize, lines.length);
+        let html = '';
+        for (let i = index; i < end; i++) {
+          let lineCode = lines[i];
+          if (lineCode.length > 5000) {
+              let chunkedLine = '';
+              for (let j=0; j < lineCode.length; j+=5000) {
+                  chunkedLine += lineCode.substring(j, j+5000) + '<wbr>';
+              }
+              lineCode = chunkedLine;
+          }
+          html += `<tr>
+            <td class="line-num">${i + 1}</td>
+            <td class="line-code">${lineCode}</td>
+          </tr>`;
+        }
+        
+        tbody.insertAdjacentHTML('beforeend', html);
+        index = end;
+
+        if (index < lines.length) {
+          requestAnimationFrame(renderChunk);
+        }
+      }
+
+      renderChunk();
+    };
+
+    window.showError = function(errMsg) {
+      document.getElementById('status').innerText = 'Error loading source: ' + errMsg;
+    };
+  </script>
+</body>
+</html>

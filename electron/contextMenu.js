@@ -18,14 +18,63 @@ function setupContextMenu(webContents) {
     const template = [];
     const isFrame = frameURL !== '' && frameURL !== webContents.getURL();
     
-    // Determine the target for IPC messages
-    // Since we use WebContentsView, we need to send UI commands to the parent BrowserWindow's webContents
-    const win = BrowserWindow.fromWebContents(webContents);
-    const targetWebContents = webContents.getType() === 'window' ? webContents : (win ? win.webContents : webContents);
+    // Since we use WebContentsView, we need to send UI commands to the main BrowserWindow's webContents
+    const targetWebContents = BrowserWindow.getAllWindows()[0]?.webContents || webContents;
     
     const sendToUI = (action, data = {}) => {
       targetWebContents.send('context-menu-command', { action, ...data });
     };
+
+    // Check if we are on the custom view-source page
+    const isViewSource = webContents.getURL().includes('view-source.html');
+    if (isViewSource) {
+      const template = [
+        { label: 'Copy', role: 'copy' },
+        { label: 'Select all', role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Save as…', click: async () => {
+            try {
+              const rawText = await webContents.executeJavaScript('window.__rawSource');
+              if (rawText) {
+                const urlParams = new URL(webContents.getURL()).searchParams;
+                const targetUrl = urlParams.get('url');
+                
+                let defaultName = 'source.txt';
+                try {
+                  const parsed = new URL(targetUrl);
+                  let pathname = parsed.pathname.split('/').pop();
+                  if (pathname) {
+                    defaultName = pathname;
+                    if (!pathname.includes('.')) defaultName += '.html';
+                  } else {
+                    defaultName = parsed.hostname + '.html';
+                  }
+                } catch (e) {}
+
+                const defaultPath = require('path').join(require('electron').app.getPath('downloads'), defaultName);
+                const { dialog } = require('electron');
+                const fs = require('fs');
+                
+                const { filePath } = await dialog.showSaveDialog({
+                  defaultPath,
+                  title: `Save source for ${targetUrl}`,
+                  filters: [{ name: 'All Files', extensions: ['*'] }]
+                });
+                
+                if (filePath) {
+                  fs.writeFileSync(filePath, rawText);
+                }
+              }
+            } catch (err) {
+              console.error("Save as error:", err);
+            }
+        }},
+        { label: 'Print…', click: () => webContents.print() }
+      ];
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup();
+      return;
+    }
 
     // 1. Link (with or without image)
     if (linkURL) {

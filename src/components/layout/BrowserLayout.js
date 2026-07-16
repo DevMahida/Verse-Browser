@@ -22,6 +22,7 @@ export default function BrowserLayout() {
     setActiveTab, 
     addTab, 
     removeTab,
+    reopenLastClosedTab,
     updateTab,
     mergeTabs,
     bookmarkBarVisibility,
@@ -36,10 +37,32 @@ export default function BrowserLayout() {
   useEffect(() => {
     if (theme === 'light') {
       document.body.classList.add('light-theme');
+      document.documentElement.dataset.theme = 'light';
     } else {
       document.body.classList.remove('light-theme');
+      document.documentElement.dataset.theme = 'dark';
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (window.electron && window.electron.themeAPI) {
+      window.electron.themeAPI.get().then(data => {
+        useBrowserStore.setState({ theme: data.effective });
+      });
+      window.electron.themeAPI.onChange((data) => {
+        useBrowserStore.setState({ theme: data.effective });
+      });
+    }
+
+    // Hydrate extension states
+    if (window.electron && window.electron.tabManager) {
+      const exts = useBrowserStore.getState().installedExtensions || [];
+      const darkExt = exts.find(e => e.id === 'ext-dark-mode');
+      if (darkExt && darkExt.isEnabled) {
+        window.electron.tabManager.setForceDark(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch default path if not set
@@ -148,10 +171,19 @@ export default function BrowserLayout() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Must have Ctrl or Cmd key
-      if (!e.ctrlKey && !e.metaKey) return;
-      
       const key = e.key.toLowerCase();
+      const state = useBrowserStore.getState();
+      const activePaneTabId = state.focusedPane === 'secondary' && state.splitTabId ? state.splitTabId : state.activeTabId;
+      
+      // F11 does not need Ctrl
+      if (key === 'f11') {
+        e.preventDefault();
+        window.electron?.toggleFullscreen?.();
+        return;
+      }
+
+      // Must have Ctrl or Cmd key for the rest
+      if (!e.ctrlKey && !e.metaKey) return;
       
       if (key === 'h') {
         e.preventDefault();
@@ -174,6 +206,24 @@ export default function BrowserLayout() {
       if (key === 'b' && e.shiftKey) {
         e.preventDefault();
         setBookmarkBarVisibility(bookmarkBarVisibility === 'always' ? 'new-tab' : 'always');
+        return;
+      }
+
+      if (key === 'f') {
+        e.preventDefault();
+        useBrowserStore.getState().updateFindState(activePaneTabId, { isVisible: true });
+        return;
+      }
+
+      if (key === 'p') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'print' });
+        return;
+      }
+
+      if (key === 's') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'save-page' });
         return;
       }
 
@@ -202,13 +252,27 @@ export default function BrowserLayout() {
 
       if (key === 't') {
         e.preventDefault();
-        addTab();
+        if (e.shiftKey) {
+          reopenLastClosedTab();
+        } else {
+          addTab();
+        }
         return;
       }
 
       if (key === 'w') {
         e.preventDefault();
         removeTab(activeTabId);
+        return;
+      }
+      
+      if (key === 'n') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          window.electron?.newIncognitoWindow?.();
+        } else {
+          window.electron?.newWindow?.();
+        }
         return;
       }
       
@@ -248,6 +312,22 @@ export default function BrowserLayout() {
         setActiveTab(tabs[nextIndex].id);
         return;
       }
+      // Ctrl + =/+ (Zoom in), Ctrl + - (Zoom out), Ctrl + 0 (Zoom reset)
+      if (key === '=' || key === '+') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-in' });
+        return;
+      }
+      if (key === '-') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-out' });
+        return;
+      }
+      if (key === '0') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-reset' });
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -258,13 +338,14 @@ export default function BrowserLayout() {
     openDownloadsTab,
     openExtensionsTab,
     toggleBookmark, 
+    bookmarkBarVisibility,
+    setBookmarkBarVisibility,
+    reopenLastClosedTab,
     tabs, 
     activeTabId, 
     setActiveTab, 
     addTab, 
-    removeTab,
-    bookmarkBarVisibility,
-    setBookmarkBarVisibility
+    removeTab
   ]);
 
   useEffect(() => {

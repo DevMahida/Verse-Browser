@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useBrowserStore } from '@/store/useBrowserStore';
 import { useShallow } from 'zustand/react/shallow';
 import clsx from 'clsx';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   MoreVertical, Plus, AppWindow, EyeOff, Key, CreditCard, MapPin,
   Clock, Download, Bookmark, ZoomIn, ZoomOut, Maximize, Printer,
@@ -19,9 +20,9 @@ const MenuItem = ({ icon: Icon, label, onClick, hasSubmenu, shortcut, disabled }
       disabled ? "opacity-50 cursor-not-allowed text-foreground/50" : "text-foreground hover:bg-foreground/10"
     )}
   >
-    <div className="flex items-center">
-      {Icon && <Icon size={16} className={clsx("mr-3", disabled ? "text-foreground/30" : "text-foreground/70 group-hover:text-foreground/90")} />}
-      <span>{label}</span>
+    <div className="flex items-center min-w-0 flex-1">
+      {Icon && <Icon size={16} className={clsx("mr-3 shrink-0", disabled ? "text-foreground/30" : "text-foreground/70 group-hover:text-foreground/90")} />}
+      <span className="truncate">{label}</span>
     </div>
     <div className="flex items-center space-x-2">
       {shortcut && <span className="text-xs text-foreground/50">{shortcut}</span>}
@@ -35,9 +36,10 @@ const MenuDivider = () => <div className="h-px bg-border my-1.5" />;
 export default function BrowserMenu() {
   const { 
     tabs, activeTabId, splitTabId, focusedPane, 
-    addTab, openHistoryTab, openDownloadsTab, openExtensionsTab, openSettingsTab, 
+    addTab, openHistoryTab, openDownloadsTab, openExtensionsTab, openSettingsTab, openBookmarksTab,
     theme, toggleTheme, setDropdownOffset,
-    bookmarks, toggleBookmark, bookmarkBarVisibility, setBookmarkBarVisibility
+    bookmarks, toggleBookmark, bookmarkBarVisibility, setBookmarkBarVisibility,
+    recentlyClosedTabs, history
   } = useBrowserStore(
     useShallow((state) => ({
       tabs: state.tabs,
@@ -49,6 +51,7 @@ export default function BrowserMenu() {
       openDownloadsTab: state.openDownloadsTab,
       openExtensionsTab: state.openExtensionsTab,
       openSettingsTab: state.openSettingsTab,
+      openBookmarksTab: state.openBookmarksTab,
       theme: state.theme,
       toggleTheme: state.toggleTheme,
       setDropdownOffset: state.setDropdownOffset,
@@ -56,11 +59,16 @@ export default function BrowserMenu() {
       toggleBookmark: state.toggleBookmark,
       bookmarkBarVisibility: state.bookmarkBarVisibility,
       setBookmarkBarVisibility: state.setBookmarkBarVisibility,
+      recentlyClosedTabs: state.recentlyClosedTabs,
+      history: state.history,
     }))
   );
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState('main'); // main, passwords, history, bookmarks, share, find, tools, help
+  const [now, setNow] = useState(() => Date.now());
+  const [qrCodeUrl, setQrCodeUrl] = useState(null);
+  
   const menuRef = useRef(null);
 
   const activePaneTabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
@@ -76,7 +84,14 @@ export default function BrowserMenu() {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    
+    // Update 'now' every minute for relative timestamps
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -181,11 +196,21 @@ export default function BrowserMenu() {
   const renderPasswordsMenu = () => (
     <>
       <SubmenuHeader title="Passwords and autofill" />
-      <MenuItem icon={Key} label="Google Password Manager" disabled />
-      <MenuItem icon={CreditCard} label="Payment methods" disabled />
+      <MenuItem icon={Key} label="Google Password Manager" onClick={() => { addTab('https://passwords.google.com'); handleClose(); }} />
+      <MenuItem icon={CreditCard} label="Payment methods" onClick={() => { addTab('https://pay.google.com/gp/w/home/settings'); handleClose(); }} />
       <MenuItem icon={MapPin} label="Addresses and more" disabled />
     </>
   );
+
+  const formatTimeAgo = (timestamp) => {
+    const diff = now - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
 
   const renderHistoryMenu = () => (
     <>
@@ -193,7 +218,52 @@ export default function BrowserMenu() {
       <MenuItem icon={Clock} label="History page" shortcut="Ctrl+H" onClick={() => { openHistoryTab(); handleClose(); }} />
       <MenuDivider />
       <div className="px-4 py-2 text-xs font-semibold text-foreground/50 uppercase tracking-wider">Recently closed</div>
-      <MenuItem label="No recently closed tabs" disabled />
+      {recentlyClosedTabs && recentlyClosedTabs.length > 0 ? (
+        recentlyClosedTabs.slice(0, 5).map((item, idx) => (
+          <MenuItem 
+            key={idx}
+            label={
+              <div className="flex items-center min-w-0">
+                {item.favicon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.favicon} alt="" className="w-4 h-4 rounded-sm mr-2 shrink-0 bg-foreground/10" />
+                ) : (
+                  <div className="w-4 h-4 rounded-sm mr-2 shrink-0 bg-foreground/10" />
+                )}
+                <span className="truncate flex-1">{item.title || item.url}</span>
+              </div>
+            }
+            shortcut={formatTimeAgo(item.closedAt)}
+            onClick={() => { addTab(item.url, item.title); handleClose(); }}
+          />
+        ))
+      ) : (
+        <MenuItem label="No recently closed tabs" disabled />
+      )}
+      <MenuDivider />
+      <div className="px-4 py-2 text-xs font-semibold text-foreground/50 uppercase tracking-wider">Recent history</div>
+      {history && history.length > 0 ? (
+        history.slice(0, 5).map((item, idx) => (
+          <MenuItem 
+            key={`hist-${idx}`}
+            label={
+              <div className="flex items-center min-w-0">
+                {item.favicon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.favicon} alt="" className="w-4 h-4 rounded-sm mr-2 shrink-0 bg-foreground/10" />
+                ) : (
+                  <div className="w-4 h-4 rounded-sm mr-2 shrink-0 bg-foreground/10" />
+                )}
+                <span className="truncate flex-1">{item.title || item.url}</span>
+              </div>
+            }
+            shortcut={formatTimeAgo(item.visit_time || item.timestamp)}
+            onClick={() => { addTab(item.url); handleClose(); }}
+          />
+        ))
+      ) : (
+        <MenuItem label="No recent history" disabled />
+      )}
       <MenuDivider />
       <MenuItem icon={MonitorSmartphone} label="Tabs from other devices" disabled />
     </>
@@ -215,7 +285,7 @@ export default function BrowserMenu() {
           handleClose();
         }} 
       />
-      <MenuItem icon={List} label="Bookmark manager" shortcut="Ctrl+Shift+O" disabled />
+      <MenuItem icon={List} label="Bookmark manager" shortcut="Ctrl+Shift+O" onClick={() => { openBookmarksTab(); handleClose(); }} />
       <MenuItem icon={Bookmark} label="Reading list" disabled />
       <MenuDivider />
       <MenuItem 
@@ -236,7 +306,9 @@ export default function BrowserMenu() {
       <MenuItem icon={Cast} label="Cast..." disabled />
       <MenuItem icon={Save} label="Save page as..." shortcut="Ctrl+S" onClick={() => handleAction('save-page')} />
       <MenuItem icon={MonitorSmartphone} label="Send to your devices" disabled />
-      <MenuItem icon={QrCode} label="Create QR code for this page" disabled />
+      <MenuItem icon={QrCode} label="Create QR code for this page" onClick={() => {
+        if (activeTab) setQrCodeUrl(activeTab.url);
+      }} />
     </>
   );
 
@@ -310,8 +382,32 @@ export default function BrowserMenu() {
       </button>
       
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-border rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95">
+        <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-border rounded-xl shadow-xl py-1.5 z-[100] animate-in fade-in zoom-in-95 duration-100 origin-top-right">
           {renderContent()}
+        </div>
+      )}
+
+      {/* QR Code Modal Overlay */}
+      {qrCodeUrl && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center animate-in fade-in" onClick={() => { setQrCodeUrl(null); handleClose(); }}>
+          <div 
+            className="bg-surface border border-border p-8 rounded-2xl shadow-2xl flex flex-col items-center animate-in zoom-in-95"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold text-foreground mb-6">Scan QR Code</h2>
+            <div className="bg-white p-4 rounded-xl shadow-inner">
+              <QRCodeSVG value={qrCodeUrl} size={200} level="H" includeMargin={false} />
+            </div>
+            <p className="mt-4 text-sm text-foreground/70 text-center max-w-[200px] break-all line-clamp-2" title={qrCodeUrl}>
+              {qrCodeUrl}
+            </p>
+            <button 
+              className="mt-6 px-6 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              onClick={() => { setQrCodeUrl(null); handleClose(); }}
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

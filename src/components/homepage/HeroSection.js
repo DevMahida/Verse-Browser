@@ -52,7 +52,7 @@ export default function HeroSection() {
   };
 
   return (
-    <div className="w-full flex flex-col items-center mt-[10vh] mb-[5vh] px-8">
+    <div className="w-full flex flex-col items-center mt-[5vh] mb-4 px-8">
       {/* Animated Logo Placeholder */}
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(107,70,193,0.3)]">

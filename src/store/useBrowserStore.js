@@ -49,6 +49,7 @@ export const useBrowserStore = create(
       history: [],
   bookmarks: [],
   bookmarkBarVisibility: 'always', // 'always' or 'new-tab'
+  showHomeButton: false, // Hidden by default like Chrome
   installedExtensions: [],
   downloads: [],
   hiddenTopSites: [],
@@ -56,6 +57,7 @@ export const useBrowserStore = create(
     defaultPath: '',
     askEveryTime: false,
   },
+  recentlyClosedTabs: [], // { url, title, favicon, closedAt }
   sessionPermissions: {}, // { [origin]: { [permission]: 'granted' | 'denied' } }
   activePermissionRequests: [], // { id, origin, permission }
   isLoggedIn: false,
@@ -281,7 +283,15 @@ export const useBrowserStore = create(
 
   // Theme State
   theme: 'dark',
-  toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
+  toggleTheme: () => {
+    const currentTheme = useBrowserStore.getState().theme;
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    if (window.electron && window.electron.themeAPI) {
+      window.electron.themeAPI.set(newTheme);
+    } else {
+      set({ theme: newTheme });
+    }
+  },
 
   // Actions
   navigate: (id, input) => set((state) => {
@@ -326,7 +336,17 @@ export const useBrowserStore = create(
   }),
 
   removeTab: (id) => set((state) => {
+    const closedTab = state.tabs.find(tab => tab.id === id);
     const newTabs = state.tabs.filter(tab => tab.id !== id);
+
+    // Track recently closed tabs (skip internal pages)
+    let recentlyClosedTabs = state.recentlyClosedTabs;
+    if (closedTab && !closedTab.url.startsWith('browser://')) {
+      recentlyClosedTabs = [
+        { url: closedTab.url, title: closedTab.title, favicon: closedTab.favicon, closedAt: Date.now() },
+        ...state.recentlyClosedTabs,
+      ].slice(0, 10);
+    }
     if (newTabs.length === 0) {
       // If there are other windows open, close this window instead of opening a new tab
       if (window.electron?.getWindowCount) {
@@ -355,7 +375,8 @@ export const useBrowserStore = create(
           zoomLevel: 0,
           findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
         }],
-        activeTabId: newId
+        activeTabId: newId,
+        recentlyClosedTabs,
       };
     }
     
@@ -386,6 +407,37 @@ export const useBrowserStore = create(
       activeTabId: newActiveId,
       splitTabId: newSplitId,
       focusedPane: newFocusedPane,
+      recentlyClosedTabs,
+    };
+  }),
+
+  reopenLastClosedTab: () => set((state) => {
+    if (!state.recentlyClosedTabs || state.recentlyClosedTabs.length === 0) return state;
+    const lastClosed = state.recentlyClosedTabs[0];
+    const remainingTabs = state.recentlyClosedTabs.slice(1);
+    
+    const newId = Date.now().toString();
+    const newTab = { 
+      id: newId, 
+      title: lastClosed.title || 'New Tab', 
+      url: lastClosed.url || 'browser://newtab', 
+      favicon: lastClosed.favicon || null,
+      isLoading: false, 
+      canGoBack: false, 
+      canGoForward: false, 
+      error: null,
+      fallbackForwardUrl: null, 
+      isPlayingAudio: false, 
+      isMuted: false, 
+      isPinned: false, 
+      zoomLevel: 0, 
+      findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
+    };
+    
+    return {
+      tabs: [...state.tabs, newTab],
+      activeTabId: newId,
+      recentlyClosedTabs: remainingTabs
     };
   }),
 
@@ -408,6 +460,10 @@ export const useBrowserStore = create(
     tabs: state.tabs.map(tab => tab.id === id ? { ...tab, ...updates } : tab)
   })),
 
+  setZoomLevel: (id, level) => set((state) => ({
+    tabs: state.tabs.map(tab => tab.id === id ? { ...tab, zoomLevel: level } : tab)
+  })),
+
   updateFindState: (id, updates) => set((state) => ({
     tabs: state.tabs.map(tab => tab.id === id ? { ...tab, findState: { ...tab.findState, ...updates } } : tab)
   })),
@@ -421,6 +477,7 @@ export const useBrowserStore = create(
   })),
 
   setDropdownOffset: (offset) => set({ dropdownOffset: offset }),
+  setShowHomeButton: (show) => set({ showHomeButton: show }),
 
   removeMultipleTabs: (ids) => set((state) => {
     const idsToRemove = new Set(ids);
@@ -528,6 +585,20 @@ export const useBrowserStore = create(
     };
   }),
 
+  openBookmarksTab: () => set((state) => {
+    const existingTab = state.tabs.find(t => t.url === 'browser://bookmarks');
+    if (existingTab) return { activeTabId: existingTab.id };
+    const newId = Date.now().toString();
+    return {
+      tabs: [...state.tabs, { 
+        id: newId, title: 'Bookmarks', url: 'browser://bookmarks', favicon: null,
+        isLoading: false, canGoBack: false, canGoForward: false, error: null,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
+      }],
+      activeTabId: newId,
+    };
+  }),
+
   openExtensionsTab: () => set((state) => {
     const existingTab = state.tabs.find(t => t.url === 'browser://extensions');
     if (existingTab) return { activeTabId: existingTab.id };
@@ -601,16 +672,26 @@ export const useBrowserStore = create(
   addToHistory: async (url) => {
     if (url.startsWith('browser://')) return;
     const state = get();
+    if (state.isIncognitoWindow) return;
     const uid = state.firebaseUid;
     const fbProfile = getFbProfile(state);
+    
+    const newHistoryItem = {
+      id: Date.now().toString(),
+      url: url,
+      title: url,
+      favicon: null,
+      visit_time: Date.now()
+    };
+    
+    // Save locally
+    set((state) => ({ history: [newHistoryItem, ...state.history].slice(0, 1000) }));
+    set({ lastHistoryDocId: newHistoryItem.id }); // Use local ID as fallback
+    
+    // Save to Firebase if logged in
     if (uid) {
       try {
-        const docRef = await addDoc(collection(db, "users", uid, "profiles", fbProfile, "history"), {
-          url: url,
-          title: url,
-          favicon: null,
-          visit_time: Date.now()
-        });
+        const docRef = await addDoc(collection(db, "users", uid, "profiles", fbProfile, "history"), newHistoryItem);
         set({ lastHistoryDocId: docRef.id });
       } catch (err) {
         console.error("Failed to save history to Firebase", err);
@@ -618,22 +699,30 @@ export const useBrowserStore = create(
     }
   },
 
-  updateHistoryTitle: async (url, title) => {
+  updateHistoryMeta: async (url, updates) => {
     const state = get();
     const fbProfile = getFbProfile(state);
+    
+    // Update local history
+    if (state.lastHistoryDocId) {
+      set((state) => ({
+        history: state.history.map(item => 
+          item.id === state.lastHistoryDocId ? { ...item, ...updates } : item
+        )
+      }));
+    }
+
     if (state.firebaseUid && state.lastHistoryDocId) {
       try {
-        await updateDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "history", state.lastHistoryDocId), {
-          title: title
-        });
+        await setDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "history", state.lastHistoryDocId), updates, { merge: true });
       } catch (err) {
-        console.error("Failed to update history title in Firebase", err);
+        console.error("Failed to update history meta in Firebase", err);
       }
     }
   },
 
-  clearHistory: () => set((state) => state), // Handled by HistoryPage directly now
-  removeFromHistory: (id) => set((state) => state), // Handled by HistoryPage directly now
+  clearHistory: () => set({ history: [] }),
+  removeFromHistory: (id) => set((state) => ({ history: state.history.filter(h => h.id !== id) })),
 
   // Bookmarks Actions
   toggleBookmark: async (url, title, favicon) => {
@@ -764,16 +853,30 @@ export const useBrowserStore = create(
   // Extension Actions
   installExtension: (extension) => set((state) => {
     if (state.installedExtensions.some(e => e.id === extension.id)) return state;
+    if (extension.id === 'ext-dark-mode' && window.electron) {
+      window.electron.tabManager.setForceDark(true);
+    }
     return { installedExtensions: [...state.installedExtensions, { ...extension, isEnabled: true }] };
   }),
-  uninstallExtension: (id) => set((state) => ({
-    installedExtensions: state.installedExtensions.filter(e => e.id !== id)
-  })),
-  toggleExtension: (id) => set((state) => ({
-    installedExtensions: state.installedExtensions.map(e => 
-      e.id === id ? { ...e, isEnabled: !e.isEnabled } : e
-    )
-  })),
+  uninstallExtension: (id) => set((state) => {
+    if (id === 'ext-dark-mode' && window.electron) {
+      window.electron.tabManager.setForceDark(false);
+    }
+    return {
+      installedExtensions: state.installedExtensions.filter(e => e.id !== id)
+    };
+  }),
+  toggleExtension: (id) => set((state) => {
+    const ext = state.installedExtensions.find(e => e.id === id);
+    if (id === 'ext-dark-mode' && window.electron && ext) {
+      window.electron.tabManager.setForceDark(!ext.isEnabled);
+    }
+    return {
+      installedExtensions: state.installedExtensions.map(e => 
+        e.id === id ? { ...e, isEnabled: !e.isEnabled } : e
+      )
+    };
+  }),
 
   setHiddenTopSites: (sites) => set({ hiddenTopSites: sites }),
 

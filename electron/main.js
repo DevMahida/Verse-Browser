@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, session, Menu, screen } = require("electron");
+const { app, BrowserWindow, ipcMain, session, Menu, screen, net, nativeTheme } = require("electron");
 const path = require("path");
 const { initTabManager } = require('./tabManager');
 const profileManager = require('./profileManager');
+const { loadWindowState, trackWindowState } = require('./windowBounds');
 
 const isDev = !app.isPackaged;
 
@@ -9,20 +10,33 @@ if (isDev) {
   process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 }
 
+// Chromium feature flags — must be a single comma-separated call (multiple calls overwrite).
+// - UserAgentClientHint: prevents Google from detecting Electron via navigator.userAgentData / Sec-CH-UA headers
+// - WebAuthentication: Electron's WebAuthn is incomplete; disabling it prevents the broken
+//   Windows Security passkey dialog and forces Google to fall back to password auth
+app.commandLine.appendSwitch('disable-features', 'UserAgentClientHint,WebAuthentication,WebAuthenticationProxy');
+// Ensure navigator.webdriver is false — Electron can set automation flags that trigger Google's bot detection
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+
 let mainWindow = null;
 const allWindows = new Set();
 let downloadSettings = {
   defaultPath: app.getPath('downloads'),
-  askEveryTime: false
+  askEveryTime: true
 };
 const activeDownloads = new Map();
 
 function createWindow(initialTab = null, x = undefined, y = undefined, isIncognito = false, profileId = 'main') {
+  // For the very first (main) window, use saved/smart bounds;
+  // for secondary windows opened via drag-off or new-window, use the supplied x/y.
+  const isMainWindow = allWindows.size === 0 && x === undefined && y === undefined;
+  const savedState = isMainWindow ? loadWindowState() : null;
+
   const options = {
-    width: 1200,
-    height: 800,
-    minWidth: 400,
-    minHeight: 600,
+    width: savedState ? savedState.width : 1200,
+    height: savedState ? savedState.height : 800,
+    minWidth: 800,
+    minHeight: 540,
     frame: false,
     icon: path.join(__dirname, '../public/favicon.png'),
 
@@ -30,18 +44,25 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      webviewTag: true,
       partition: isIncognito ? 'incognito_' + Date.now() : 'persist:' + profileId
     },
   };
-  
+
+  if (savedState) {
+    options.x = savedState.x;
+    options.y = savedState.y;
+  }
   if (x !== undefined) options.x = x;
   if (y !== undefined) options.y = y;
 
   const win = new BrowserWindow(options);
+  if (savedState && savedState.isMaximized) win.maximize();
   win._isIncognito = isIncognito;
   win._profileId = profileId;
   allWindows.add(win);
+
+  // Only track bounds for the main window (so secondary popup windows don't overwrite the saved state)
+  if (isMainWindow) trackWindowState(win);
 
   let url = "http://localhost:3000";
   const searchParams = new URLSearchParams();
@@ -97,13 +118,81 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
   if (!mainWindow) mainWindow = win;
 }
 
+// --- Permanent fix for stale cache/lock errors after force-kills ---
+// When Electron is force-killed (taskkill, crash, etc.) it can't cleanly release
+// file locks on GPU cache, disk cache, and quota databases. The next launch then
+// fails with "Unable to move the cache", "Could not open the quota database", etc.
+//
+// Fix: (1) Enforce single instance so two Electrons never fight over the same data dir.
+//       (2) On startup, nuke the GPUCache dir (it's fully regenerated) and remove
+//           stale lock files from quota/service-worker databases.
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  // Another instance is already running — focus it instead of launching a second one
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+const fs = require('fs');
+try {
+  const userDataPath = app.getPath('userData');
+
+  // 1. Nuke GPUCache — it's a pure cache, Chromium regenerates it instantly.
+  //    This is the ONLY fix for "Unable to move the cache: Access is denied".
+  const gpuCachePath = path.join(userDataPath, 'GPUCache');
+  if (fs.existsSync(gpuCachePath)) {
+    fs.rmSync(gpuCachePath, { recursive: true, force: true });
+  }
+
+  // 2. Walk the entire userData tree and remove stale lock files.
+  //    These cause "Could not open the quota database" errors.
+  const staleLockNames = new Set(['lockfile', 'LOCK']);
+  const walk = (dir) => {
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (staleLockNames.has(entry.name)) {
+          try { fs.unlinkSync(fullPath); } catch {}
+        }
+      }
+    } catch {}
+  };
+  walk(userDataPath);
+} catch {}
+
 app.whenReady().then(async () => {
+  // Dynamically strip Electron and AppName from the default User-Agent
+  // Making the trailing space optional (\s?) ensures it strips even if it's at the end of the string.
+  const chromeVersion = process.versions.chrome || '120.0.0.0';
+  const spoofedUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+  app.userAgentFallback = spoofedUA;
+  session.defaultSession.setUserAgent(spoofedUA);
+
   initTabManager();
 
   // Profile IPCs
   ipcMain.handle('get-profiles', () => profileManager.getProfiles());
   ipcMain.handle('create-profile', (event, { name, email }) => profileManager.createProfile(name, email));
   ipcMain.handle('delete-profile', (event, id) => profileManager.deleteProfile(id));
+  
+  // Session IPCs
+  ipcMain.on('clear-browsing-data', async () => {
+    try {
+      await session.defaultSession.clearStorageData();
+      console.log('Browsing data cleared');
+    } catch (err) {
+      console.error('Failed to clear browsing data:', err);
+    }
+  });
   ipcMain.on('switch-profile', (event, id) => {
     for (const win of allWindows) {
       if (win._profileId === id && !win._isIncognito) {
@@ -481,14 +570,30 @@ app.whenReady().then(async () => {
     const fileName = item.getFilename();
     const totalBytes = item.getTotalBytes();
     
+    console.log(`[will-download] item.getURL()=${item.getURL()} webContents.getURL()=${webContents.getURL()}`);
+    const itemUrlStr = item.getURL().split('#')[0].replace(/\/$/, '');
+    const webUrlStr = webContents.getURL().split('#')[0].replace(/\/$/, '');
+    const isWebpage = itemUrlStr === webUrlStr || item.getMimeType() === 'text/html';
+    
     if (!downloadSettings.askEveryTime) {
       const savePath = path.join(downloadSettings.defaultPath, fileName);
       item.setSavePath(savePath);
+    } else if (isWebpage) {
+      // User is saving the actual webpage, suggest the page title instead of 'download'
+      let title = webContents.getTitle() || 'Webpage';
+      // Sanitize title for filename
+      title = title.replace(/[<>:"/\\|?*]+/g, '_');
+      const suggestedPath = path.join(downloadSettings.defaultPath, title + '.html');
+      console.log(`[will-download] Setting saveDialogOptions to ${suggestedPath}`);
+      item.setSaveDialogOptions({
+        defaultPath: suggestedPath
+      });
     }
 
     activeDownloads.set(downloadId, item);
 
-    const hostWebContents = webContents.hostWebContents || webContents;
+    // Route download progress IPC to the main UI window instead of the webview
+    const hostWebContents = BrowserWindow.getAllWindows()[0]?.webContents || webContents;
 
     hostWebContents.send('download-started', {
       id: downloadId,
@@ -579,7 +684,44 @@ app.whenReady().then(async () => {
   ipcMain.on('revoke-permission', (event, { origin, permission }) => {
     const permKey = `${origin}-${permission}`;
     sessionPermissions.delete(permKey);
+    const sess = session.defaultSession;
+    sess.clearHostResolverCache();
+    // In a real implementation, you'd want to persist these revocations or use sess.setPermissionRequestHandler
+    console.log(`[Permissions] Revoked ${permission} for ${origin}`);
   });
+
+  // Handle custom view-source fetching
+  ipcMain.handle('fetch-source', async (event, { url, partition }) => {
+    const { net } = require('electron');
+    try {
+      const sess = session.fromPartition(partition || 'persist:main');
+      const response = await net.fetch(url, { session: sess });
+      const text = await response.text();
+      return text;
+    } catch (err) {
+      console.error('[fetch-source] Error fetching URL:', url, err);
+      throw err;
+    }
+  });
+
+  // Handle native theme
+  ipcMain.handle('theme-get', () => {
+    return { effective: nativeTheme.shouldUseDarkColors ? 'dark' : 'light' };
+  });
+
+  ipcMain.on('theme-set', (event, theme) => {
+    nativeTheme.themeSource = theme;
+  });
+
+  nativeTheme.on('updated', () => {
+    const effective = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+    for (const win of allWindows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('theme-updated', { effective });
+      }
+    }
+  });
+
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

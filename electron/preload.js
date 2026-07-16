@@ -1,5 +1,20 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// --- Anti-detection Spoofing ---
+// Runs at document-start before any page scripts execute
+try {
+  if (!window.chrome) {
+    window.chrome = { runtime: {}, csi: function(){}, loadTimes: function(){} };
+  }
+  if (navigator.plugins.length === 0) {
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [{ name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' }]
+    });
+  }
+  Object.defineProperty(navigator, 'webdriver', { get: () => false });
+} catch (e) {}
+
+
 contextBridge.exposeInMainWorld("electron", {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
@@ -19,6 +34,13 @@ contextBridge.exposeInMainWorld("electron", {
   switchProfile: (id) => ipcRenderer.send('switch-profile', id),
   deleteProfile: (id) => ipcRenderer.invoke('delete-profile', id),
   
+  // Theme Management
+  themeAPI: {
+    get: () => ipcRenderer.invoke('theme-get'),
+    set: (theme) => ipcRenderer.send('theme-set', theme),
+    onChange: (callback) => ipcRenderer.on('theme-updated', (_event, data) => callback(data))
+  },
+  
   // TabManager (WebContentsView/BrowserView)
   tabManager: {
     create: (data) => ipcRenderer.send('tab-create', data),
@@ -28,11 +50,18 @@ contextBridge.exposeInMainWorld("electron", {
     action: (data) => ipcRenderer.send('tab-action', data),
     executeJavaScript: (data) => ipcRenderer.invoke('tab-execute-javascript', data),
     capturePage: (tabId) => ipcRenderer.invoke('tab-capture-page', tabId),
+    fetchSource: (data) => ipcRenderer.invoke('fetch-source', data),
+    setForceDark: (enabled) => ipcRenderer.send('set-force-dark', enabled),
     onTabEvent: (callback) => {
       const handler = (_event, data) => callback(data);
       ipcRenderer.on('tab-event', handler);
       return () => ipcRenderer.removeListener('tab-event', handler);
     }
+  },
+
+  // Session Management
+  sessionManager: {
+    clearBrowsingData: () => ipcRenderer.send('clear-browsing-data')
   },
 
   // Custom Window Dragging

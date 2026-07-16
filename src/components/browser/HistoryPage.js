@@ -5,8 +5,8 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit, deleteDoc, doc, writeBatch } from "firebase/firestore";
 
 export default function HistoryPage() {
-  const { firebaseUid, currentUser, navigate, activeTabId, addTab, profileId } = useBrowserStore();
-  const [history, setHistory] = useState([]);
+  const { firebaseUid, navigate, activeTabId, addTab, profileId, history: localHistory, clearHistory, removeFromHistory } = useBrowserStore();
+  const [firebaseHistory, setFirebaseHistory] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const fbProfile = String(profileId);
@@ -19,7 +19,7 @@ export default function HistoryPage() {
         limit(500)
       );
       getDocs(q).then((snapshot) => {
-        setHistory(snapshot.docs.map(doc => {
+        setFirebaseHistory(snapshot.docs.map(doc => {
           const data = doc.data();
           return {
             id: doc.id,
@@ -32,9 +32,19 @@ export default function HistoryPage() {
     }
   }, [firebaseUid, fbProfile]);
 
-  const filteredHistory = history.filter(item => 
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    item.url.toLowerCase().includes(searchQuery.toLowerCase())
+  // Merge local history with firebase history, avoiding duplicates by URL/title (rough heuristic) or ID
+  const combinedHistoryMap = new Map();
+  localHistory.forEach(item => combinedHistoryMap.set(item.id, {
+    ...item,
+    timestamp: item.timestamp || item.visit_time || 0
+  }));
+  firebaseHistory.forEach(item => combinedHistoryMap.set(item.id, item));
+  
+  const combinedHistory = Array.from(combinedHistoryMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+
+  const filteredHistory = combinedHistory.filter(item => 
+    (item.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (item.url || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const formatDate = (timestamp) => {
@@ -50,14 +60,15 @@ export default function HistoryPage() {
   };
 
   const handleClearHistory = async () => {
+    clearHistory();
     if (firebaseUid) {
       try {
         const batch = writeBatch(db);
-        history.forEach((item) => {
+        firebaseHistory.forEach((item) => {
           batch.delete(doc(db, "users", firebaseUid, "profiles", fbProfile, "history", item.id));
         });
         await batch.commit();
-        setHistory([]);
+        setFirebaseHistory([]);
       } catch (err) {
         console.error(err);
       }
@@ -66,10 +77,11 @@ export default function HistoryPage() {
 
   const handleRemoveItem = async (e, id) => {
     e.stopPropagation();
-    if (firebaseUid) {
+    removeFromHistory(id);
+    if (firebaseUid && firebaseHistory.some(h => h.id === id)) {
       try {
         await deleteDoc(doc(db, "users", firebaseUid, "profiles", fbProfile, "history", id));
-        setHistory(prev => prev.filter(item => item.id !== id));
+        setFirebaseHistory(prev => prev.filter(item => item.id !== id));
       } catch (err) {
         console.error(err);
       }
@@ -89,7 +101,7 @@ export default function HistoryPage() {
           <button 
             onClick={handleClearHistory}
             aria-label="Clear all history"
-            className="flex items-center px-4 py-2 min-h-[44px] text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors font-medium focus-visible:ring-2 focus-visible:outline-none"
+            className="flex items-center px-4 py-2 min-h-11 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors font-medium focus-visible:ring-2 focus-visible:outline-none"
           >
             <Trash2 className="w-4 h-4 mr-2" />
             Clear History
@@ -129,7 +141,7 @@ export default function HistoryPage() {
                   <button 
                     onClick={(e) => handleOpenInNewTab(e, item.url)}
                     aria-label="Open in new tab"
-                    className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-foreground/70 hover:text-accent bg-background rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className="p-2 min-w-11 min-h-11 flex items-center justify-center text-foreground/70 hover:text-accent bg-background rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     title="Open in new tab"
                   >
                     <ExternalLink className="w-4 h-4" />
@@ -137,7 +149,7 @@ export default function HistoryPage() {
                   <button 
                     onClick={(e) => handleRemoveItem(e, item.id)}
                     aria-label="Remove from history"
-                    className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-foreground/70 hover:text-red-400 bg-background rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className="p-2 min-w-11 min-h-11 flex items-center justify-center text-foreground/70 hover:text-red-400 bg-background rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     title="Remove from history"
                   >
                     <X className="w-4 h-4" />

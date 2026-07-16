@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -16,13 +16,13 @@ import BrowserMenu from "./BrowserMenu";
 import ProfileMenu from "./ProfileMenu";
 
 export default function NavigationBar() {
-  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser } = useBrowserStore(
-    useShallow((state) => ({
-      toggleAISidebar: state.toggleAISidebar,
-      isAISidebarOpen: state.isAISidebarOpen,
-      tabs: state.tabs,
-      activeTabId: state.activeTabId,
-      splitTabId: state.splitTabId,
+    const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton } = useBrowserStore(
+      useShallow((state) => ({
+        toggleAISidebar: state.toggleAISidebar,
+        isAISidebarOpen: state.isAISidebarOpen,
+        tabs: state.tabs,
+        activeTabId: state.activeTabId,
+        splitTabId: state.splitTabId,
       focusedPane: state.focusedPane,
       clearSplitView: state.clearSplitView,
       navigate: state.navigate,
@@ -39,19 +39,24 @@ export default function NavigationBar() {
       isIncognitoWindow: state.isIncognitoWindow,
       userProfilePic: state.userProfilePic,
       currentUser: state.currentUser,
+      downloads: state.downloads,
+      showHomeButton: state.showHomeButton,
     }))
   );
   
   const activePaneTabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
   const activeTab = tabs.find(t => t.id === activePaneTabId);
-  const zoomLevel = activeTab?.zoomLevel || 1.0;
-  const zoomPercentage = Math.round(zoomLevel * 100);
+  const zoomLevel = activeTab?.zoomLevel || 0;
+  const zoomPercentage = Math.round(Math.pow(1.2, zoomLevel) * 100);
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [downloadAnimate, setDownloadAnimate] = useState(false);
+  const [downloadJustFinished, setDownloadJustFinished] = useState(false);
+  const prevCompletedCount = useRef(0);
   const { suggestions } = useSearchSuggestions(inputValue);
   const overflowMenuRef = useRef(null);
   const inputRef = useRef(null);
@@ -84,6 +89,36 @@ export default function NavigationBar() {
     
     setDropdownOffset(offset);
   }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, isFocused, suggestions.length, setDropdownOffset]);
+
+  useEffect(() => {
+    if (!downloads) return;
+    
+    const completedCount = downloads.filter(d => d.state === 'completed').length;
+    if (completedCount > prevCompletedCount.current) {
+      // A new download finished
+      setDownloadAnimate(true);
+      setShowDownloadsPopup(true);
+      setDownloadJustFinished(true);
+      
+      const hideTimer = setTimeout(() => {
+        setShowDownloadsPopup(false);
+        setDownloadJustFinished(false);
+      }, 3000);
+      
+      const animTimer = setTimeout(() => setDownloadAnimate(false), 300);
+      
+      prevCompletedCount.current = completedCount;
+      return () => {
+        clearTimeout(hideTimer);
+        clearTimeout(animTimer);
+      };
+    }
+    
+    prevCompletedCount.current = completedCount;
+  }, [downloads]);
+
+  const hasActiveDownloads = (downloads || []).some(d => d.state === 'progressing');
+  const showDownloadBtn = hasActiveDownloads || downloadJustFinished || showDownloadsPopup;
 
 
   useEffect(() => {
@@ -160,6 +195,11 @@ export default function NavigationBar() {
   const canGoBack = activeTab?.canGoBack || activeTab?.url !== 'browser://newtab';
   const canGoForward = activeTab?.canGoForward || (activeTab?.url === 'browser://newtab' && !!activeTab?.fallbackForwardUrl);
 
+  const activeDownload = (downloads || []).find(d => d.state === 'progressing');
+  const downloadProgress = activeDownload && activeDownload.totalBytes > 0 
+    ? (activeDownload.receivedBytes / activeDownload.totalBytes) * 100 
+    : 0;
+
   return (
     <div className="h-12 bg-surface border-b border-border flex items-center px-4 space-x-4 select-none">
       {/* Navigation Controls */}
@@ -169,7 +209,7 @@ export default function NavigationBar() {
           onClick={handleBack} 
           aria-label="Go back"
           className={clsx(
-            "p-2 rounded-lg transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+            "p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5",
             canGoBack ? "hover:bg-foreground/10 hover:text-foreground" : "opacity-50 cursor-not-allowed"
           )}
         >
@@ -179,7 +219,7 @@ export default function NavigationBar() {
           onClick={handleForward} 
           aria-label="Go forward"
           className={clsx(
-            "p-2 rounded-lg transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+            "p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5",
             canGoForward ? "hover:bg-foreground/10 hover:text-foreground" : "opacity-50 cursor-not-allowed"
           )}
         >
@@ -188,26 +228,29 @@ export default function NavigationBar() {
         <button 
           onClick={handleReloadOrStop}
           aria-label={activeTab?.isLoading ? "Stop loading" : "Reload page"}
-          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5"
         >
           {activeTab?.isLoading ? <X size={18} /> : <RotateCw size={18} />}
         </button>
-        <button 
-          onClick={handleHome}
-          aria-label="Go home"
-          className="p-2 rounded-lg transition-colors hover:bg-foreground/10 hover:text-foreground min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <Home size={18} />
-        </button>
+        {showHomeButton && (
+          <button 
+            onClick={handleHome}
+            aria-label="Go home"
+            className="p-2 rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5"
+          >
+            <Home size={18} />
+          </button>
+        )}
       </div>
 
       {/* URL / Search Bar */}
-      <div className="flex-1 relative">
-        <div className="flex items-center h-8 bg-background rounded-full px-3 border border-border focus-within:border-accent transition-colors">
-          <div className="relative">
+      <div className="flex-1 relative mx-2">
+        <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
+          <div className="relative flex items-center">
+            <FcGoogle size={18} className="mr-2 opacity-80 grayscale-[20%] hover:grayscale-0 transition-all" />
             <button 
               onClick={() => setShowSiteSettings(!showSiteSettings)}
-              className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-md hover:bg-foreground/10"
+              className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
               title="Site settings"
             >
               <Shield size={14} />
@@ -227,9 +270,34 @@ export default function NavigationBar() {
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder-gray-500 h-full"
-            placeholder="Search Google or type a URL"
+            className="flex-1 bg-transparent border-none outline-none text-[14px] text-foreground placeholder-foreground/50 h-full w-full min-w-0"
+            placeholder="Ask Google or type a URL"
           />
+          {zoomPercentage !== 100 && (
+            <div className="flex items-center ml-1 bg-foreground/5 rounded-md border border-border/50 h-6">
+              <button 
+                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-out' })}
+                className="px-1.5 h-full text-foreground/70 hover:text-foreground hover:bg-foreground/10 rounded-l-md transition-colors flex items-center justify-center"
+                title="Zoom Out"
+              >
+                <Minus size={12} />
+              </button>
+              <button 
+                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-reset' })}
+                className="px-2 h-full text-[11px] font-medium text-foreground/80 hover:text-foreground hover:bg-foreground/10 transition-colors flex items-center justify-center min-w-[36px]"
+                title="Reset zoom"
+              >
+                {zoomPercentage}%
+              </button>
+              <button 
+                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-in' })}
+                className="px-1.5 h-full text-foreground/70 hover:text-foreground hover:bg-foreground/10 rounded-r-md transition-colors flex items-center justify-center"
+                title="Zoom In"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
           <button 
             onClick={() => toggleBookmark(activeTab?.url, activeTab?.title, activeTab?.favicon)}
             className={clsx(
@@ -257,40 +325,48 @@ export default function NavigationBar() {
       </div>
 
       {/* Extensions & Tools */}
-      <div className="flex items-center space-x-1 text-foreground/70" ref={overflowMenuRef}>
-        <div className="relative hidden lg:flex" ref={downloadsRef}>
-          <button 
-            onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
-            aria-label="Downloads"
-            className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-            title="Downloads"
-          >
-            <Download size={18} />
-          </button>
-          {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
-        </div>
-        <div className="relative hidden lg:flex" ref={historyRef}>
-          <button 
-            onClick={() => setShowHistoryPopup(!showHistoryPopup)}
-            aria-label="History"
-            className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-            title="History"
-          >
-            <Clock size={18} />
-          </button>
-          {showHistoryPopup && <HistoryPopup onClose={() => setShowHistoryPopup(false)} />}
-        </div>
+      <div className="flex items-center space-x-0.5 text-foreground/70" ref={overflowMenuRef}>
+        {showDownloadBtn && (
+          <div className="relative hidden lg:flex" ref={downloadsRef}>
+            <button 
+              onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
+              aria-label="Downloads"
+              className={clsx(
+                "relative p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+                downloadAnimate && "animate-in zoom-in-90 duration-200"
+              )}
+              title="Downloads"
+            >
+              {activeDownload && (
+                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 44 44">
+                  <circle cx="22" cy="22" r="16" fill="none" className="stroke-foreground/10" strokeWidth="2.5" />
+                  <circle 
+                    cx="22" cy="22" r="16" 
+                    fill="none" 
+                    className="stroke-accent transition-all duration-300 ease-out" 
+                    strokeWidth="2.5" 
+                    strokeDasharray={100.5} 
+                    strokeDashoffset={100.5 - (downloadProgress / 100) * 100.5}
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+              <Download size={18} className={activeDownload ? "text-accent" : ""} />
+            </button>
+            {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
+          </div>
+        )}
         <button 
-          onClick={openExtensionsTab}
+          disabled
           aria-label="Extensions"
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-11 min-h-11 items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
-          title="Extensions"
+          className="p-2 rounded-full transition-colors hidden lg:flex min-w-10 min-h-10 items-center justify-center focus-visible:ring-2 focus-visible:outline-none opacity-50 cursor-not-allowed"
+          title="Extensions (Coming Soon)"
         >
           <Puzzle size={18} />
         </button>
 
         {/* User Account / Incognito */}
-        <div className="relative flex items-center" ref={profileRef}>
+        <div className="relative flex items-center pl-1" ref={profileRef}>
           {isIncognitoWindow ? (
             <button 
               onClick={() => setShowProfileMenu(!showProfileMenu)}
@@ -317,14 +393,14 @@ export default function NavigationBar() {
         </div>
 
         {/* Divider */}
-        <div className="w-px h-4 bg-border mx-1" />
+        <div className="w-px h-5 bg-border mx-1" />
 
         {/* Split View Toggle / Close */}
         {splitTabId && (
           <button 
             onClick={clearSplitView}
             aria-label="Close Split View"
-            className="p-2 rounded-lg transition-colors flex items-center justify-center bg-accent text-white hover:bg-accent-hover px-3 text-sm font-medium mr-2 min-h-11 focus-visible:ring-2 focus-visible:outline-none"
+            className="p-2 rounded-full transition-colors flex items-center justify-center bg-accent text-white hover:bg-accent-hover px-3 text-sm font-medium mr-1 min-h-10 focus-visible:ring-2 focus-visible:outline-none"
           >
             Close Split
           </button>
@@ -333,14 +409,14 @@ export default function NavigationBar() {
         <button 
           onClick={toggleAISidebar}
           aria-label="Toggle AI Sidebar"
-          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-11 min-h-11 focus-visible:ring-2 focus-visible:outline-none ${isAISidebarOpen ? 'bg-accent/20 text-accent hover:bg-accent/30' : 'hover:bg-foreground/10 hover:text-foreground'}`}
+          className={`p-2 rounded-full transition-colors flex items-center justify-center min-w-10 min-h-10 focus-visible:ring-2 focus-visible:outline-none ${isAISidebarOpen ? 'bg-accent/20 text-accent hover:bg-accent/30' : 'hover:bg-foreground/10 hover:text-foreground'}`}
         >
           <Sparkles size={18} />
         </button>
         <button 
           onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-          className="p-2 rounded-lg hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-11 min-h-11 items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+          className="p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors hidden lg:flex min-w-10 min-h-10 items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
           title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
         >
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

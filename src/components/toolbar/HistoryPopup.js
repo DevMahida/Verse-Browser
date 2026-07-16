@@ -5,8 +5,8 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
 export default function HistoryPopup({ onClose }) {
-  const { openHistoryTab, firebaseUid, currentUser, navigate, activeTabId, profileId } = useBrowserStore();
-  const [history, setHistory] = useState([]);
+  const { openHistoryTab, firebaseUid, currentUser, navigate, activeTabId, profileId, history: localHistory } = useBrowserStore();
+  const [firebaseHistory, setFirebaseHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fbProfile = String(profileId);
@@ -21,7 +21,7 @@ export default function HistoryPopup({ onClose }) {
       );
       getDocs(q).then((snapshot) => {
         if (isMounted) {
-          setHistory(snapshot.docs.map(doc => {
+          setFirebaseHistory(snapshot.docs.map(doc => {
             const data = doc.data();
             return {
               id: doc.id,
@@ -47,6 +47,16 @@ export default function HistoryPopup({ onClose }) {
     };
   }, [firebaseUid, fbProfile]);
 
+  const combinedHistoryMap = new Map();
+  localHistory.forEach(item => combinedHistoryMap.set(item.id, {
+    ...item,
+    timestamp: item.timestamp || item.visit_time || 0
+  }));
+  firebaseHistory.forEach(item => combinedHistoryMap.set(item.id, item));
+  
+  const combinedHistory = Array.from(combinedHistoryMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+  const displayHistory = combinedHistory.slice(0, 5);
+
   const handleShowAll = () => {
     openHistoryTab();
     onClose();
@@ -68,28 +78,29 @@ export default function HistoryPopup({ onClose }) {
       
       <div className="flex flex-col max-h-75 overflow-y-auto custom-scrollbar">
         {isLoading ? (
-          <div className="flex justify-center p-6 text-accent">
-            <Loader2 className="w-6 h-6 animate-spin" />
+          <div className="flex justify-center p-8">
+            <Loader2 className="w-6 h-6 animate-spin text-accent" />
           </div>
-        ) : history.length === 0 ? (
+        ) : displayHistory.length > 0 ? (
+          <div className="py-2">
+            {displayHistory.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavigate(item.url)}
+                className="w-full flex items-center justify-between p-3 hover:bg-surface border-b border-border last:border-b-0 transition-colors text-left"
+              >
+                <div className="flex flex-col min-w-0 pr-4">
+                  <span className="text-foreground text-sm font-medium truncate">{item.title}</span>
+                  <span className="text-foreground/50 text-xs truncate">{item.url}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-foreground/30 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+        ) : (
           <div className="p-6 text-center text-gray-500 text-sm">
             No recent history
           </div>
-        ) : (
-          history.map((item) => (
-            <div 
-              key={item.id}
-              onClick={() => handleNavigate(item.url)}
-              className="p-3 border-b border-border/50 hover:bg-surface-hover transition-colors flex flex-col gap-1 cursor-pointer"
-            >
-              <div className="text-sm font-medium text-foreground/90 truncate" title={item.title}>
-                {item.title || item.url}
-              </div>
-              <div className="text-xs text-foreground/50 truncate" title={item.url}>
-                {item.url}
-              </div>
-            </div>
-          ))
         )}
       </div>
 
