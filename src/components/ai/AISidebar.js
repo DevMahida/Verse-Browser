@@ -3,7 +3,7 @@
 import {
   X, Sparkles, Send, BookOpen, FileText, Languages, HelpCircle,
   List, FileEdit, Zap, Loader2, RotateCcw, PencilLine, Copy, Check,
-  Square, History, Trash2, ChevronDown, MessageSquarePlus, Clock
+  Square, History, Trash2, ChevronDown, MessageSquarePlus, Clock, Download, FileDown
 } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -64,6 +64,7 @@ export default function AISidebar() {
   const [sessionId, setSessionId] = useState(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [targetLang, setTargetLang] = useState("Spanish");
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [view, setView] = useState("chat"); // "chat" | "history"
@@ -121,6 +122,53 @@ export default function AISidebar() {
     navigator.clipboard.writeText(text);
     setCopiedIndex(idx);
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleExport = async (content, format, userPrompt) => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, format, userPrompt })
+      });
+      if (!res.ok) throw new Error("Export failed");
+      
+      // Get the suggested filename from the response headers, or generate a fallback
+      const contentDisposition = res.headers.get("Content-Disposition");
+      let filename = `export.${format}`;
+      if (contentDisposition && contentDisposition.includes('filename="')) {
+        const matches = /filename="([^"]+)"/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1];
+        }
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Export error:", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportConversation = async (format) => {
+    if (messages.length === 0) return;
+    const fullContent = messages.map(m => {
+      const role = m.role === 'user' ? 'You' : 'AI Assistant';
+      return `**${role}:**\n${m.content}`;
+    }).join('\n\n---\n\n');
+
+    await handleExport(fullContent, format, "Full Conversation Transcript");
   };
 
   const handleStop = () => {
@@ -377,13 +425,31 @@ export default function AISidebar() {
           </button>
           {/* Reset current chat */}
           {messages.length > 0 && view === "chat" && (
-            <button
-              onClick={startNewChat}
-              className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer"
-              title="Clear Chat"
-            >
-              <RotateCcw size={16} />
-            </button>
+            <>
+              <button
+                onClick={() => handleExportConversation('pdf')}
+                disabled={isExporting}
+                className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                title="Export Conversation as PDF"
+              >
+                <Download size={16} />
+              </button>
+              <button
+                onClick={() => handleExportConversation('docx')}
+                disabled={isExporting}
+                className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                title="Export Conversation as DOCX"
+              >
+                <FileDown size={16} />
+              </button>
+              <button
+                onClick={startNewChat}
+                className="text-foreground/70 hover:text-accent p-1.5 rounded-md transition-colors cursor-pointer"
+                title="Clear Chat"
+              >
+                <RotateCcw size={16} />
+              </button>
+            </>
           )}
           {/* Close */}
           <button
@@ -514,6 +580,22 @@ export default function AISidebar() {
                       title="Copy"
                     >
                       {copiedIndex === idx ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleExport(msg.content, 'pdf', messages[idx - 1]?.content)}
+                      disabled={isExporting}
+                      className="p-1.5 hover:bg-foreground/5 rounded-md text-foreground/50 hover:text-foreground/80 transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50"
+                      title="Download PDF"
+                    >
+                      <Download size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleExport(msg.content, 'docx', messages[idx - 1]?.content)}
+                      disabled={isExporting}
+                      className="p-1.5 hover:bg-foreground/5 rounded-md text-foreground/50 hover:text-foreground/80 transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50"
+                      title="Download DOCX"
+                    >
+                      <FileDown size={14} />
                     </button>
                     {msg.model && (
                       <span className="flex items-center gap-1 text-[10px] text-foreground/30 bg-surface-hover/50 border border-border/40 rounded-full px-2 py-0.5">

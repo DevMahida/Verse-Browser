@@ -106,10 +106,11 @@ export default function NavigationBar() {
     if (showHistoryPopup) offset = 420;
     else if (showDownloadsPopup) offset = 420;
     else if (showSiteSettings) offset = 250;
+    else if (showProfileMenu) offset = 500;
     else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
     
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, isFocused, suggestions.length, setDropdownOffset]);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showProfileMenu, isFocused, suggestions.length, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;

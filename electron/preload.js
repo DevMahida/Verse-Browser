@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld("electron", {
     }
   },
 
+  // Google Sign-In (opens system browser via loopback OAuth)
+  googleSignIn: () => ipcRenderer.invoke('google-signin'),
+
   // Session Management
   sessionManager: {
     clearBrowsingData: () => ipcRenderer.send('clear-browsing-data')

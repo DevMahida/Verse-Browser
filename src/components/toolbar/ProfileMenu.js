@@ -89,8 +89,50 @@ export default function ProfileMenu({ onClose }) {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    addTab('https://accounts.google.com/ServiceLogin', 'Sign In');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    if (!window.electron?.googleSignIn) {
+      // Fallback for non-Electron environments
+      addTab('https://accounts.google.com/ServiceLogin', 'Sign In');
+      onClose();
+      return;
+    }
+
+    setIsSigningIn(true);
+    try {
+      // Opens the user's REAL system browser (Chrome/Edge) for sign-in
+      const result = await window.electron.googleSignIn();
+
+      if (result.success && result.userInfo) {
+        // Update the browser store with the user's info
+        useBrowserStore.setState({
+          isLoggedIn: true,
+          currentUser: {
+            name: result.userInfo.name,
+            email: result.userInfo.email,
+            pic: result.userInfo.picture,
+          },
+          userProfilePic: result.userInfo.picture,
+        });
+
+        // Sync with Electron ProfileManager
+        if (window.electron?.updateProfileData) {
+          const profileId = new URLSearchParams(window.location.search).get('profileId') || 'main';
+          window.electron.updateProfileData(profileId, {
+            name: result.userInfo.name,
+            email: result.userInfo.email,
+            avatar: result.userInfo.picture,
+          });
+        }
+      } else if (!result.success) {
+        console.error('Google sign-in failed:', result.error);
+      }
+    } catch (err) {
+      console.error('Google sign-in error:', err);
+    } finally {
+      setIsSigningIn(false);
+    }
     onClose();
   };
 
@@ -158,10 +200,11 @@ export default function ProfileMenu({ onClose }) {
           {!isLoggedIn ? (
             <button 
               onClick={handleGoogleSignIn}
-              className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm border border-gray-200"
+              disabled={isSigningIn}
+              className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-full text-sm font-medium transition-colors shadow-sm border border-gray-200 disabled:opacity-60 disabled:cursor-wait"
             >
               <FcGoogle size={18} />
-              Sign in with Google
+              {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
             </button>
           ) : (
             <div className="flex gap-2">

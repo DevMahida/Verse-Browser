@@ -1,9 +1,72 @@
-const { WebContentsView, ipcMain, BrowserWindow } = require('electron');
+const { WebContentsView, ipcMain, BrowserWindow, app } = require('electron');
 const profileManager = require('./profileManager');
 
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
 let globalForceDarkEnabled = false;
+
+const isGoogleAuthUrl = (url) => {
+  if (!url) return false;
+  return url.includes('accounts.google.com') && 
+         !url.includes('myaccount.google.com') && 
+         !url.includes('SignOutOptions');
+};
+
+/**
+ * Opens a clean, native popup BrowserWindow for Google sign-in.
+ * 
+ * Why this works: Google blocks sign-in inside Electron WebContentsViews because
+ * the CDP debugger (used for Force Dark Mode) sets navigator.webdriver = true.
+ * This popup is a standard BrowserWindow with NO debugger attached, using the
+ * same session partition so cookies persist back to the main browser tabs.
+ * 
+ * After the user signs in, the popup closes and the original tab navigates
+ * to the signed-in Google page.
+ */
+function openGoogleAuthPopup(originView, partition, authUrl = 'https://accounts.google.com/ServiceLogin') {
+  const parentWin = BrowserWindow.getAllWindows()[0];
+  
+  const popup = new BrowserWindow({
+    width: 500,
+    height: 650,
+    show: true,
+    title: 'Sign in with Google',
+    webPreferences: {
+      partition: partition,
+      contextIsolation: false, // Set to false specifically for the auth popup to allow synchronous shimming
+      nodeIntegration: false,
+      plugins: true, // CRITICAL: Populates navigator.plugins naturally to bypass BotGuard headless detection
+      preload: require('path').join(__dirname, 'auth-preload.js'),
+    },
+  });
+
+  popup.setMenuBarVisibility(false);
+
+  // Navigate to Google sign-in
+  popup.loadURL(authUrl);
+
+  // Watch for successful sign-in: when the user lands on myaccount.google.com
+  // or any non-signin Google page, they've completed the flow.
+  popup.webContents.on('did-navigate', (e, url) => {
+    if (
+      url.startsWith('https://myaccount.google.com') ||
+      url.startsWith('https://www.google.com') ||
+      url.startsWith('https://mail.google.com') ||
+      url.startsWith('https://www.youtube.com') ||
+      (url.startsWith('https://accounts.google.com') &&
+        !url.includes('/ServiceLogin') &&
+        !url.includes('/signin') &&
+        !url.includes('/AccountChooser') &&
+        !url.includes('/AddSession'))
+    ) {
+      // Sign-in is complete! Navigate the original tab and close the popup.
+      if (originView && !originView.webContents.isDestroyed()) {
+        originView.webContents.loadURL(url);
+      }
+      popup.close();
+    }
+  });
+}
 
 function initTabManager() {
   if (isInitialized) return;
@@ -35,26 +98,10 @@ function initTabManager() {
     // We must address ALL of them or sign-in gets blocked.
 
     const viewSession = view.webContents.session;
-    const chromeVersion = process.versions.chrome || '120.0.0.0';
-    const spoofedUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
-    viewSession.setUserAgent(spoofedUA);
-
-    // Network-level: intercept ALL outgoing requests and spoof the UA and Client Hints.
+    // Network-level: optionally modify other headers if needed in the future,
+    // but app.userAgentFallback natively scrubs "Electron" from sec-ch-ua headers!
     viewSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      const headers = { ...details.requestHeaders };
-      
-      // Force the User-Agent header
-      headers['User-Agent'] = spoofedUA;
-
-      // Spoof Client Hints to look like standard Google Chrome instead of Electron
-      for (const key of Object.keys(headers)) {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey === 'sec-ch-ua') {
-          headers[key] = headers[key].replace(/Electron/g, 'Google Chrome');
-        }
-      }
-      
-      callback({ requestHeaders: headers });
+      callback({ requestHeaders: details.requestHeaders });
     });
 
 
@@ -71,6 +118,32 @@ function initTabManager() {
       }
     };
 
+    view.webContents.on('will-navigate', (e, navigationUrl) => {
+      if (globalForceDarkEnabled) {
+        applyForceDarkToView(view, true, navigationUrl);
+      }
+
+      // If navigating to Google Sign in, prevent it and open the clean popup instead
+      if (isGoogleAuthUrl(navigationUrl)) {
+        e.preventDefault();
+        openGoogleAuthPopup(view, finalPartition, navigationUrl);
+      }
+    });
+
+    view.webContents.on('will-redirect', (e, navigationUrl) => {
+      // Catch server-side redirects (e.g. YouTube redirects client to accounts.google.com via 302 redirect)
+      if (isGoogleAuthUrl(navigationUrl)) {
+        e.preventDefault();
+        openGoogleAuthPopup(view, finalPartition, navigationUrl);
+      }
+    });
+
+    view.webContents.on('did-start-navigation', (e, navigationUrl, isInPlace, isMainFrame) => {
+      if (isMainFrame && globalForceDarkEnabled) {
+        applyForceDarkToView(view, true, navigationUrl);
+      }
+    });
+
     view.webContents.on('did-navigate', (e, navigationUrl) => {
       let displayUrl = navigationUrl;
       if (navigationUrl.includes('view-source.html') && navigationUrl.includes('?url=')) {
@@ -78,6 +151,23 @@ function initTabManager() {
         displayUrl = `view-source:${target}`;
       }
       forwardEvent('did-navigate', { url: displayUrl, canGoBack: view.webContents.canGoBack(), canGoForward: view.webContents.canGoForward() });
+      
+      if (globalForceDarkEnabled) {
+        applyForceDarkToView(view, true, navigationUrl);
+      }
+
+      // Intercept Google's "rejected" page and redirect to a clean popup window, preserving the continue URL if possible
+      if (navigationUrl.includes('accounts.google.com/v3/signin/rejected') || navigationUrl.includes('accounts.google.com/signin/rejected')) {
+        let authUrl = 'https://accounts.google.com/ServiceLogin';
+        try {
+          const urlObj = new URL(navigationUrl);
+          const continueParam = urlObj.searchParams.get('continue');
+          if (continueParam) {
+            authUrl = `https://accounts.google.com/ServiceLogin?continue=${encodeURIComponent(continueParam)}`;
+          }
+        } catch (e) {}
+        openGoogleAuthPopup(view, finalPartition, authUrl);
+      }
     });
     view.webContents.on('did-navigate-in-page', (e, navigationUrl) => {
       let displayUrl = navigationUrl;
@@ -86,6 +176,10 @@ function initTabManager() {
         displayUrl = `view-source:${target}`;
       }
       forwardEvent('did-navigate-in-page', { url: displayUrl, canGoBack: view.webContents.canGoBack(), canGoForward: view.webContents.canGoForward() });
+
+      if (globalForceDarkEnabled) {
+        applyForceDarkToView(view, true);
+      }
     });
     view.webContents.on('page-title-updated', (e, title) => forwardEvent('page-title-updated', { title }));
     view.webContents.on('page-favicon-updated', (e, favicons) => forwardEvent('page-favicon-updated', { favicons }));
@@ -95,9 +189,18 @@ function initTabManager() {
       if (errorCode !== -3) forwardEvent('did-fail-load', { errorCode, errorDescription });
     });
 
-    // Allow popups for OAuth flows (like Google Sign-In) to open normally
+    // Handle new window opens (target="_blank" or window.open)
     view.webContents.setWindowOpenHandler(({ url }) => {
-      return { action: 'allow' };
+      // If opening a Google Auth page, open in our clean popup instead
+      if (isGoogleAuthUrl(url)) {
+        openGoogleAuthPopup(view, finalPartition, url);
+        return { action: 'deny' };
+      }
+      // Otherwise open a new tab in the browser
+      if (!sender.isDestroyed()) {
+        sender.send('webview-new-window', { url });
+      }
+      return { action: 'deny' };
     });
 
     // We no longer need preload IPC injection for did-finish-load because we execute JS dynamically for view-source
@@ -146,6 +249,23 @@ function initTabManager() {
     }
   });
 
+  // Direct Google Sign-In popup handler — triggered from ProfileMenu's "Sign in with Google" button
+  ipcMain.on('google-signin-popup', (event) => {
+    const sender = event.sender;
+    const win = BrowserWindow.fromWebContents(sender);
+    const profileId = win ? win._profileId : 'main';
+    const isIncognito = win ? win._isIncognito : false;
+    const partition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
+    
+    // Find the active tab view to navigate after sign-in, or pass null
+    const activeView = [...views.values()].find(v => {
+      const parentWin = BrowserWindow.getAllWindows().find(w => w.contentView && w.contentView.children && w.contentView.children.includes(v));
+      return parentWin === win;
+    }) || null;
+    
+    openGoogleAuthPopup(activeView, partition);
+  });
+
   ipcMain.on('set-force-dark', (event, enabled) => {
     globalForceDarkEnabled = enabled;
     for (const view of views.values()) {
@@ -153,10 +273,14 @@ function initTabManager() {
     }
   });
 
-  function applyForceDarkToView(view, enabled) {
+  function applyForceDarkToView(view, enabled, pendingUrl = null) {
     if (!view || view.webContents.isDestroyed()) return;
     try {
-      if (enabled) {
+      const url = pendingUrl || view.webContents.getURL();
+      // Google detects the CDP debugger attachment as "webdriver" and blocks sign-ins
+      const isGoogleAuth = url.startsWith('https://accounts.google.com') || url.startsWith('https://myaccount.google.com');
+
+      if (enabled && !isGoogleAuth) {
         if (!view.webContents.debugger.isAttached()) {
           view.webContents.debugger.attach('1.3');
         }

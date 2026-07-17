@@ -1,8 +1,12 @@
 const { app, BrowserWindow, ipcMain, session, Menu, screen, net, nativeTheme } = require("electron");
 const path = require("path");
+
+// Load .env.local so Electron main process can read GOOGLE_CLIENT_ID, etc.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 const { initTabManager } = require('./tabManager');
 const profileManager = require('./profileManager');
 const { loadWindowState, trackWindowState } = require('./windowBounds');
+const { authenticateWithGoogle } = require('./google-oauth');
 
 const isDev = !app.isPackaged;
 
@@ -11,10 +15,9 @@ if (isDev) {
 }
 
 // Chromium feature flags — must be a single comma-separated call (multiple calls overwrite).
-// - UserAgentClientHint: prevents Google from detecting Electron via navigator.userAgentData / Sec-CH-UA headers
 // - WebAuthentication: Electron's WebAuthn is incomplete; disabling it prevents the broken
 //   Windows Security passkey dialog and forces Google to fall back to password auth
-app.commandLine.appendSwitch('disable-features', 'UserAgentClientHint,WebAuthentication,WebAuthenticationProxy');
+app.commandLine.appendSwitch('disable-features', 'WebAuthentication,WebAuthenticationProxy');
 // Ensure navigator.webdriver is false — Electron can set automation flags that trigger Google's bot detection
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
@@ -171,13 +174,87 @@ try {
 
 app.whenReady().then(async () => {
   // Dynamically strip Electron and AppName from the default User-Agent
-  // Making the trailing space optional (\s?) ensures it strips even if it's at the end of the string.
+  // We use the Chrome User-Agent globally. Because we set app.userAgentFallback,
+  // Electron automatically scrubs "Electron" from navigator.userAgentData and sec-ch-ua!
   const chromeVersion = process.versions.chrome || '120.0.0.0';
   const spoofedUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
   app.userAgentFallback = spoofedUA;
   session.defaultSession.setUserAgent(spoofedUA);
 
+  // Ensure every newly created profile session partition also uses the spoofed Edge User-Agent
+  app.on('session-created', (sess) => {
+    sess.setUserAgent(spoofedUA);
+  });
+
+  // Google Sign-In via system browser (loopback OAuth)
+  ipcMain.handle('google-signin', async () => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      return { success: false, error: 'Google OAuth credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local' };
+    }
+
+    try {
+      const { tokens, userInfo } = await authenticateWithGoogle(
+        clientId,
+        clientSecret,
+        ['email', 'profile']
+      );
+      return { success: true, tokens, userInfo };
+    } catch (err) {
+      console.error('Google sign-in error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  const savedState = loadWindowState();
+
   initTabManager();
+
+  // Listen for successful system handoffs and inject session
+  ipcMain.on('system-handoff-success', async (event, { tabId, partition, payload }) => {
+    try {
+      console.log(`[Main] Handling system handoff success for tab ${tabId} in partition ${partition}`);
+      
+      const sess = session.fromPartition(partition);
+      
+      // CRITICAL CONSTRAINT: Google does not provide an endpoint to exchange an OAuth 'code'
+      // or 'access_token' into a full web session cookie (SID/HSID) for domains like .youtube.com.
+      // 
+      // We will inject a placeholder token cookie to represent the successful handoff,
+      // but without legacy/undocumented APIs (like MergeSession), full web authentication
+      // across YouTube cannot be completed solely via an OAuth token loopback.
+      
+      if (payload.code) {
+        await sess.cookies.set({
+          url: 'https://youtube.com',
+          name: 'VERSE_OAUTH_TOKEN',
+          value: payload.code,
+          domain: '.youtube.com',
+          secure: true,
+          httpOnly: true,
+          expirationDate: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
+        });
+        console.log('[Main] Injected placeholder VERSE_OAUTH_TOKEN cookie.');
+      }
+
+      // Instruct the renderer to reload the tab to consume the new state
+      const viewsMap = require('./tabManager')._viewsMap || new Map();
+      // Wait, we don't have direct access to views Map from here easily unless exported.
+      // But tab-navigate or tab-action can be sent to the renderer, or we can just broadcast.
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tab-event', {
+          tabId,
+          eventName: 'handoff-completed',
+          data: { success: true }
+        });
+      }
+    } catch (err) {
+      console.error('[Main] Failed to handle system handoff session injection:', err);
+    }
+  });
 
   // Profile IPCs
   profileManager.registerProfileHandlers((profileId, isGuest) => {
@@ -414,6 +491,20 @@ app.whenReady().then(async () => {
       if (!sidCookie) {
         cachedGoogleAccounts = null;
         lastSid = null;
+
+        // Fallback: Check if the profile is signed in via the new OAuth Loopback flow (saved in profiles.json)
+        const profiles = profileManager.getProfiles();
+        const profile = profiles.find(p => p.id === profileId);
+        
+        if (profile && profile.email) {
+          const userObj = {
+            name: profile.name,
+            email: profile.email,
+            pic: profile.avatar
+          };
+          return { isLoggedIn: true, profilePic: profile.avatar, currentUser: userObj, accounts: [userObj] };
+        }
+
         return { isLoggedIn: false, profilePic: null, currentUser: null, accounts: [] };
       }
 
