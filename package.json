@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "electron": "electron .",
-    "desktop": "concurrently \"npm run dev\" \"wait-on http-get://localhost:3000 && electron .\""
+    "desktop": "concurrently -k \"npm run dev\" \"wait-on http-get://localhost:3000 && electron .\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

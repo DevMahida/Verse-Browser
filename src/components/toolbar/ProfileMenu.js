@@ -92,8 +92,7 @@ export default function ProfileMenu({ onClose }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   const handleGoogleSignIn = async () => {
-    if (!window.electron?.googleSignIn) {
-      // Fallback for non-Electron environments
+    if (!window.electron?.linkGoogle) {
       addTab('https://accounts.google.com/ServiceLogin', 'Sign In');
       onClose();
       return;
@@ -101,43 +100,29 @@ export default function ProfileMenu({ onClose }) {
 
     setIsSigningIn(true);
     try {
-      // Opens the user's REAL system browser (Chrome/Edge) for sign-in
-      const result = await window.electron.googleSignIn();
-
-      if (result.success && result.userInfo) {
-        // Update the browser store with the user's info
-        useBrowserStore.setState({
-          isLoggedIn: true,
-          currentUser: {
-            name: result.userInfo.name,
-            email: result.userInfo.email,
-            pic: result.userInfo.picture,
-          },
-          userProfilePic: result.userInfo.picture,
-        });
-
-        // Sync with Electron ProfileManager
-        if (window.electron?.updateProfileData) {
-          const profileId = new URLSearchParams(window.location.search).get('profileId') || 'main';
-          window.electron.updateProfileData(profileId, {
-            name: result.userInfo.name,
-            email: result.userInfo.email,
-            avatar: result.userInfo.picture,
-          });
-        }
-      } else if (!result.success) {
-        console.error('Google sign-in failed:', result.error);
+      const updatedProfile = await window.electron.linkGoogle(currentProfileId);
+      if (updatedProfile) {
+        // Update local state to reflect the new linked profile data
+        setProfiles(profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+        onClose();
       }
     } catch (err) {
       console.error('Google sign-in error:', err);
+      setError(err.message || 'Failed to sign in with Google');
     } finally {
       setIsSigningIn(false);
     }
-    onClose();
   };
 
   const handleSignOut = async () => {
-    await logoutGoogle();
+    if (window.electron?.unlinkGoogle) {
+      const updatedProfile = await window.electron.unlinkGoogle(currentProfileId);
+      if (updatedProfile) {
+        setProfiles(profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+      }
+    } else if (typeof logoutGoogle === 'function') {
+      await logoutGoogle(); // Fallback
+    }
     onClose();
   };
 

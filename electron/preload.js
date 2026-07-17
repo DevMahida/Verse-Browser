@@ -12,6 +12,19 @@ try {
     });
   }
   Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  
+  // Forge userAgentData to perfectly match the forged Client Hints HTTP headers
+  Object.defineProperty(navigator, 'userAgentData', {
+    get: () => ({
+      brands: [
+        { brand: "Chromium", version: "122" },
+        { brand: "Not(A:Brand", version: "24" },
+        { brand: "Google Chrome", version: "122" }
+      ],
+      mobile: false,
+      platform: "Windows"
+    })
+  });
 } catch (e) {}
 
 
@@ -60,8 +73,9 @@ contextBridge.exposeInMainWorld("electron", {
     }
   },
 
-  // Google Sign-In (opens system browser via loopback OAuth)
-  googleSignIn: () => ipcRenderer.invoke('google-signin'),
+  // Google OAuth Loopback Handlers
+  linkGoogle: (id) => ipcRenderer.invoke('profiles:linkGoogle', id),
+  unlinkGoogle: (id) => ipcRenderer.invoke('profiles:unlinkGoogle', id),
 
   // Session Management
   sessionManager: {

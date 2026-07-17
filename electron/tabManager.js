@@ -12,61 +12,6 @@ const isGoogleAuthUrl = (url) => {
          !url.includes('SignOutOptions');
 };
 
-/**
- * Opens a clean, native popup BrowserWindow for Google sign-in.
- * 
- * Why this works: Google blocks sign-in inside Electron WebContentsViews because
- * the CDP debugger (used for Force Dark Mode) sets navigator.webdriver = true.
- * This popup is a standard BrowserWindow with NO debugger attached, using the
- * same session partition so cookies persist back to the main browser tabs.
- * 
- * After the user signs in, the popup closes and the original tab navigates
- * to the signed-in Google page.
- */
-function openGoogleAuthPopup(originView, partition, authUrl = 'https://accounts.google.com/ServiceLogin') {
-  const parentWin = BrowserWindow.getAllWindows()[0];
-  
-  const popup = new BrowserWindow({
-    width: 500,
-    height: 650,
-    show: true,
-    title: 'Sign in with Google',
-    webPreferences: {
-      partition: partition,
-      contextIsolation: false, // Set to false specifically for the auth popup to allow synchronous shimming
-      nodeIntegration: false,
-      plugins: true, // CRITICAL: Populates navigator.plugins naturally to bypass BotGuard headless detection
-      preload: require('path').join(__dirname, 'auth-preload.js'),
-    },
-  });
-
-  popup.setMenuBarVisibility(false);
-
-  // Navigate to Google sign-in
-  popup.loadURL(authUrl);
-
-  // Watch for successful sign-in: when the user lands on myaccount.google.com
-  // or any non-signin Google page, they've completed the flow.
-  popup.webContents.on('did-navigate', (e, url) => {
-    if (
-      url.startsWith('https://myaccount.google.com') ||
-      url.startsWith('https://www.google.com') ||
-      url.startsWith('https://mail.google.com') ||
-      url.startsWith('https://www.youtube.com') ||
-      (url.startsWith('https://accounts.google.com') &&
-        !url.includes('/ServiceLogin') &&
-        !url.includes('/signin') &&
-        !url.includes('/AccountChooser') &&
-        !url.includes('/AddSession'))
-    ) {
-      // Sign-in is complete! Navigate the original tab and close the popup.
-      if (originView && !originView.webContents.isDestroyed()) {
-        originView.webContents.loadURL(url);
-      }
-      popup.close();
-    }
-  });
-}
 
 function initTabManager() {
   if (isInitialized) return;
@@ -98,12 +43,6 @@ function initTabManager() {
     // We must address ALL of them or sign-in gets blocked.
 
     const viewSession = view.webContents.session;
-    // Network-level: optionally modify other headers if needed in the future,
-    // but app.userAgentFallback natively scrubs "Electron" from sec-ch-ua headers!
-    viewSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      callback({ requestHeaders: details.requestHeaders });
-    });
-
 
 
     // Make sure we have a solid background color so it's not transparent
@@ -122,20 +61,10 @@ function initTabManager() {
       if (globalForceDarkEnabled) {
         applyForceDarkToView(view, true, navigationUrl);
       }
-
-      // If navigating to Google Sign in, prevent it and open the clean popup instead
-      if (isGoogleAuthUrl(navigationUrl)) {
-        e.preventDefault();
-        openGoogleAuthPopup(view, finalPartition, navigationUrl);
-      }
     });
 
     view.webContents.on('will-redirect', (e, navigationUrl) => {
-      // Catch server-side redirects (e.g. YouTube redirects client to accounts.google.com via 302 redirect)
-      if (isGoogleAuthUrl(navigationUrl)) {
-        e.preventDefault();
-        openGoogleAuthPopup(view, finalPartition, navigationUrl);
-      }
+      // Nothing needed here if we let it redirect natively
     });
 
     view.webContents.on('did-start-navigation', (e, navigationUrl, isInPlace, isMainFrame) => {
@@ -156,18 +85,7 @@ function initTabManager() {
         applyForceDarkToView(view, true, navigationUrl);
       }
 
-      // Intercept Google's "rejected" page and redirect to a clean popup window, preserving the continue URL if possible
-      if (navigationUrl.includes('accounts.google.com/v3/signin/rejected') || navigationUrl.includes('accounts.google.com/signin/rejected')) {
-        let authUrl = 'https://accounts.google.com/ServiceLogin';
-        try {
-          const urlObj = new URL(navigationUrl);
-          const continueParam = urlObj.searchParams.get('continue');
-          if (continueParam) {
-            authUrl = `https://accounts.google.com/ServiceLogin?continue=${encodeURIComponent(continueParam)}`;
-          }
-        } catch (e) {}
-        openGoogleAuthPopup(view, finalPartition, authUrl);
-      }
+
     });
     view.webContents.on('did-navigate-in-page', (e, navigationUrl) => {
       let displayUrl = navigationUrl;
@@ -191,10 +109,9 @@ function initTabManager() {
 
     // Handle new window opens (target="_blank" or window.open)
     view.webContents.setWindowOpenHandler(({ url }) => {
-      // If opening a Google Auth page, open in our clean popup instead
+      // Allow Google Auth popups to open natively so they inherit the correct session and UA
       if (isGoogleAuthUrl(url)) {
-        openGoogleAuthPopup(view, finalPartition, url);
-        return { action: 'deny' };
+        return { action: 'allow' };
       }
       // Otherwise open a new tab in the browser
       if (!sender.isDestroyed()) {

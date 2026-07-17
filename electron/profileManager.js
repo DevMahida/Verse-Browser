@@ -160,6 +160,49 @@ class ProfileManager {
     ipcMain.on('switch-profile', (event, id) => {
       openWindowFn(id, id === 'guest');
     });
+
+    const { signInWithGoogle, encryptToken } = require('./googleAuth');
+    
+    ipcMain.handle('profiles:linkGoogle', async (_e, profileId) => {
+      const result = await signInWithGoogle({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      });
+      return this.linkGoogleAccount(profileId, result);
+    });
+    
+    ipcMain.handle('profiles:unlinkGoogle', (_e, profileId) => this.unlinkGoogleAccount(profileId));
+  }
+
+  linkGoogleAccount(profileId, { tokens, profile }) {
+    const p = this.profiles.find((x) => x.id === profileId);
+    if (!p) return null;
+    
+    const { encryptToken } = require('./googleAuth');
+    
+    p.google = {
+      email: profile.email,
+      name: profile.name,
+      picture: profile.picture,
+      // refresh_token is only sent on first consent — keep the old one if this is a re-link
+      refreshToken: tokens.refresh_token ? encryptToken(tokens.refresh_token) : p.google?.refreshToken,
+    };
+    
+    // Update the profile's main avatar and email if they aren't explicitly set, or overwrite them
+    p.email = profile.email;
+    p.avatar = profile.picture || p.avatar;
+    if (p.name === 'Default' || !p.name) p.name = profile.name;
+    
+    this.saveProfiles(this.profiles);
+    return p;
+  }
+
+  unlinkGoogleAccount(profileId) {
+    const p = this.profiles.find((x) => x.id === profileId);
+    if (!p) return null;
+    delete p.google;
+    this.saveProfiles(this.profiles);
+    return p;
   }
 }
 

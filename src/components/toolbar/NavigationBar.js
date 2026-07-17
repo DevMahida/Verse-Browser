@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -71,6 +71,7 @@ export default function NavigationBar() {
       const params = new URLSearchParams(window.location.search);
       setCurrentProfileId(params.get('profileId') || 'main');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

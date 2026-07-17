@@ -6,7 +6,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 const { initTabManager } = require('./tabManager');
 const profileManager = require('./profileManager');
 const { loadWindowState, trackWindowState } = require('./windowBounds');
-const { authenticateWithGoogle } = require('./google-oauth');
+// const { authenticateWithGoogle } = require('./google-oauth'); // Disabled per user request
 
 const isDev = !app.isPackaged;
 
@@ -20,6 +20,7 @@ if (isDev) {
 app.commandLine.appendSwitch('disable-features', 'WebAuthentication,WebAuthenticationProxy');
 // Ensure navigator.webdriver is false — Electron can set automation flags that trigger Google's bot detection
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+
 
 let mainWindow = null;
 const allWindows = new Set();
@@ -186,27 +187,7 @@ app.whenReady().then(async () => {
     sess.setUserAgent(spoofedUA);
   });
 
-  // Google Sign-In via system browser (loopback OAuth)
-  ipcMain.handle('google-signin', async () => {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-    if (!clientId || !clientSecret) {
-      return { success: false, error: 'Google OAuth credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local' };
-    }
-
-    try {
-      const { tokens, userInfo } = await authenticateWithGoogle(
-        clientId,
-        clientSecret,
-        ['email', 'profile']
-      );
-      return { success: true, tokens, userInfo };
-    } catch (err) {
-      console.error('Google sign-in error:', err);
-      return { success: false, error: err.message };
-    }
-  });
 
   const savedState = loadWindowState();
 
