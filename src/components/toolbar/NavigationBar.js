@@ -57,7 +57,13 @@ export default function NavigationBar() {
   const [downloadAnimate, setDownloadAnimate] = useState(false);
   const [downloadJustFinished, setDownloadJustFinished] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const [currentProfileId, setCurrentProfileId] = useState('main');
+  const [currentProfileId, setCurrentProfileId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('profileId') || 'main';
+    }
+    return 'main';
+  });
   const prevCompletedCount = useRef(0);
   const { suggestions } = useSearchSuggestions(inputValue);
   const overflowMenuRef = useRef(null);
@@ -65,14 +71,6 @@ export default function NavigationBar() {
   const historyRef = useRef(null);
   const downloadsRef = useRef(null);
   const profileRef = useRef(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      setCurrentProfileId(params.get('profileId') || 'main');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (window.electron && window.electron.getProfiles) {

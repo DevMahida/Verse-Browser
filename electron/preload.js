@@ -77,6 +77,11 @@ contextBridge.exposeInMainWorld("electron", {
   linkGoogle: (id) => ipcRenderer.invoke('profiles:linkGoogle', id),
   unlinkGoogle: (id) => ipcRenderer.invoke('profiles:unlinkGoogle', id),
 
+  // Tavily API Key Handlers
+  setTavilyKey: (profileId, key) => ipcRenderer.invoke('profiles:setTavilyKey', { profileId, key }),
+  removeTavilyKey: (profileId) => ipcRenderer.invoke('profiles:removeTavilyKey', profileId),
+  getTavilyKey: (profileId) => ipcRenderer.invoke('profiles:getTavilyKey', profileId),
+
   // Session Management
   sessionManager: {
     clearBrowsingData: () => ipcRenderer.send('clear-browsing-data')

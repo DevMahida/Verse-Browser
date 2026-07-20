@@ -9,6 +9,8 @@ import {
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import { useResizableWidth } from "@/hooks/useResizableWidth";
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
 
 // Available OpenRouter models — slugs verified from /api/v1/models (2026-07-13)
 const AI_MODELS = [
@@ -153,7 +155,7 @@ export default function AISidebar() {
     aiChatSessions, currentAiSessionId, selectedAiModel,
     saveAiSession, deleteAiSession, setCurrentAiSessionId,
     clearAllAiSessions, setSelectedAiModel,
-    researchMode, setResearchMode,
+    researchMode, setResearchMode, profileId,
   } = useBrowserStore();
 
   const [messages, setMessages] = useState([]);
@@ -175,6 +177,62 @@ export default function AISidebar() {
   const [researchModel, setResearchModel] = useState("mini"); // mini | pro
   const [researchOutputLength, setResearchOutputLength] = useState("standard"); // short | standard | long
   const [includePageContext, setIncludePageContext] = useState(true);
+
+  // Deep Search API Key State
+  const [hasTavilyKey, setHasTavilyKey] = useState(false);
+  const [tavilyKeyInput, setTavilyKeyInput] = useState("");
+  const [maskedTavilyKey, setMaskedTavilyKey] = useState("");
+  const [showTavilySettings, setShowTavilySettings] = useState(false);
+
+  useEffect(() => {
+    if (window.electron?.getTavilyKey && profileId) {
+      window.electron.getTavilyKey(profileId).then(key => {
+        if (key) {
+          setHasTavilyKey(true);
+          setMaskedTavilyKey(key.substring(0, 5) + "••••••" + key.substring(key.length - 4));
+        } else {
+          setHasTavilyKey(false);
+          setMaskedTavilyKey("");
+        }
+      }).catch(console.error);
+    }
+  }, [profileId, researchMode]);
+
+  const handleSaveTavilyKey = async () => {
+    const key = tavilyKeyInput.trim();
+    if (!key.startsWith("tvly-")) {
+      alert("Invalid Tavily Key. It should start with tvly-");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: key, query: "test" })
+      });
+      if (!res.ok) throw new Error("Invalid key");
+      
+      await window.electron.setTavilyKey(profileId, key);
+      setHasTavilyKey(true);
+      setMaskedTavilyKey(key.substring(0, 5) + "••••••" + key.substring(key.length - 4));
+      setTavilyKeyInput("");
+      setShowTavilySettings(false);
+    } catch (e) {
+      alert("That key didn't work. Please check it and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemoveTavilyKey = async () => {
+    if (window.electron?.removeTavilyKey) {
+      await window.electron.removeTavilyKey(profileId);
+      setHasTavilyKey(false);
+      setMaskedTavilyKey("");
+      setShowTavilySettings(false);
+    }
+  };
 
   const messagesEndRef = useRef(null);
   const isProcessingRef = useRef(false);
@@ -406,7 +464,7 @@ export default function AISidebar() {
   // ── Deep Research Handler ──────────────────────────────────────────────────────
   const handleResearch = async (queryOverride) => {
     const query = typeof queryOverride === "string" ? queryOverride.trim() : input.trim();
-    if (!query || isLoading || isProcessingRef.current) return;
+    if (!query || isLoading || isProcessingRef.current || !hasTavilyKey) return;
 
     isProcessingRef.current = true;
     setInput("");
@@ -426,6 +484,11 @@ export default function AISidebar() {
     }, 1000);
 
     try {
+      let activeKey = "";
+      if (window.electron?.getTavilyKey) {
+        activeKey = await window.electron.getTavilyKey(profileId) || "";
+      }
+
       // Get page context if enabled
       let pageContext = "";
       if (includePageContext) {
@@ -437,7 +500,10 @@ export default function AISidebar() {
 
       const res = await fetch("/api/research", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-tavily-key": activeKey
+        },
         signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           query,
@@ -772,9 +838,12 @@ export default function AISidebar() {
     </div>
   );
 
+  const { width, panelRef, handleProps } = useResizableWidth({ min: 280, max: 700, defaultWidth: 350 });
+
   // ── MAIN RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full w-full">
+    <div ref={panelRef} className="flex flex-col h-full relative" style={{ width }}>
+      <ResizeHandle handleProps={handleProps} />
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
         <div className="flex items-center font-medium text-foreground">
@@ -852,32 +921,108 @@ export default function AISidebar() {
           <HistoryView />
         ) : messages.length === 0 ? (
           <>
-            {/* Greeting */}
-            <div>
-              {researchMode ? (
-                <>
-                  <h2 className="text-xl font-bold text-foreground mb-2">
-                    <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Deep Research</span>
-                  </h2>
-                  <p className="text-sm text-foreground/70 leading-relaxed">
-                    I&apos;ll search the web from multiple angles, analyze sources, and synthesize a comprehensive report with citations.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-xl font-bold text-foreground mb-2">Hello! I&apos;m your AI assistant.</h2>
-                  <p className="text-sm text-foreground/70 leading-relaxed">
-                    I can help you understand, summarize, and work with the content of any web page.
-                  </p>
-                </>
-              )}
-            </div>
-
-            {researchMode ? (
-              <>
-                {/* Research Config */}
+            {researchMode && (!hasTavilyKey || showTavilySettings) ? (
+              <div className="flex flex-col space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium text-foreground/80 mb-3">Research Settings</h3>
+                  <h2 className="text-xl font-bold text-foreground mb-2">
+                    <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Connect Tavily</span>
+                  </h2>
+                  <p className="text-sm text-foreground/70 leading-relaxed mb-4">
+                    Deep Search requires your own Tavily API key to perform multi-source research. Your key is encrypted and stored locally per-profile.
+                  </p>
+                  
+                  <div className="bg-surface border border-border rounded-xl p-4 space-y-3 mb-6">
+                    <h3 className="text-sm font-medium text-foreground">How to get a key:</h3>
+                    <ol className="list-decimal pl-4 text-xs text-foreground/70 space-y-2">
+                      <li>Go to <a href="https://app.tavily.com/" target="_blank" rel="noreferrer" className="text-violet-400 hover:underline">app.tavily.com</a> and sign up or log in.</li>
+                      <li>Open the API Keys section of the dashboard.</li>
+                      <li>Copy your key (it starts with <code>tvly-</code>).</li>
+                      <li>Paste it below and click Connect.</li>
+                    </ol>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {hasTavilyKey && showTavilySettings && (
+                      <div className="text-sm font-medium text-foreground">
+                        Current key: <span className="text-violet-400 font-mono bg-violet-400/10 px-2 py-1 rounded">{maskedTavilyKey}</span>
+                      </div>
+                    )}
+                    <input
+                      type="password"
+                      placeholder="tvly-..."
+                      value={tavilyKeyInput}
+                      onChange={(e) => setTavilyKeyInput(e.target.value)}
+                      disabled={isLoading}
+                      className="w-full bg-surface-hover border border-border focus:border-violet-500/50 rounded-lg px-3 py-2 text-sm text-foreground outline-none transition-colors"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveTavilyKey}
+                        disabled={isLoading || !tavilyKeyInput.trim()}
+                        className="flex-1 bg-violet-500 hover:bg-violet-600 text-white font-medium text-sm py-2 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        {isLoading ? "Connecting..." : hasTavilyKey ? "Replace Key" : "Connect"}
+                      </button>
+                      {hasTavilyKey && (
+                        <button
+                          onClick={handleRemoveTavilyKey}
+                          disabled={isLoading}
+                          className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium text-sm py-2 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Remove Key
+                        </button>
+                      )}
+                      {hasTavilyKey && showTavilySettings && (
+                        <button
+                          onClick={() => { setShowTavilySettings(false); setTavilyKeyInput(""); }}
+                          disabled={isLoading}
+                          className="flex-1 bg-surface border border-border hover:bg-surface-hover text-foreground font-medium text-sm py-2 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Greeting */}
+                <div>
+                  {researchMode ? (
+                    <>
+                      <h2 className="text-xl font-bold text-foreground mb-2">
+                        <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Deep Research</span>
+                      </h2>
+                      <p className="text-sm text-foreground/70 leading-relaxed">
+                        I&apos;ll search the web from multiple angles, analyze sources, and synthesize a comprehensive report with citations.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-xl font-bold text-foreground mb-2">Hello! I&apos;m your AI assistant.</h2>
+                      <p className="text-sm text-foreground/70 leading-relaxed">
+                        I can help you understand, summarize, and work with the content of any web page.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {researchMode ? (
+                  <>
+                    {/* Research Config */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-foreground/80">Research Settings</h3>
+                        {hasTavilyKey && (
+                          <button 
+                            onClick={() => setShowTavilySettings(true)}
+                            className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer bg-violet-400/10 px-2 py-1 rounded"
+                          >
+                            <Globe size={12} /> {maskedTavilyKey}
+                          </button>
+                        )}
+                      </div>
                   <div className="flex flex-col gap-2">
                     {/* Model selection */}
                     <div className="flex items-center gap-2">
@@ -1029,6 +1174,8 @@ export default function AISidebar() {
                 </div>
               </>
             )}
+            </>
+          )}
           </>
         ) : (
           <div className="flex flex-col space-y-4">
@@ -1353,7 +1500,7 @@ export default function AISidebar() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={!input.trim()}
+              disabled={!input.trim() || (researchMode && !hasTavilyKey)}
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
                 researchMode
                   ? "bg-violet-500/10 hover:bg-violet-500/20 text-violet-400"

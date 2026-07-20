@@ -172,6 +172,10 @@ class ProfileManager {
     });
     
     ipcMain.handle('profiles:unlinkGoogle', (_e, profileId) => this.unlinkGoogleAccount(profileId));
+
+    ipcMain.handle('profiles:setTavilyKey', (_e, { profileId, key }) => this.setTavilyKey(profileId, key));
+    ipcMain.handle('profiles:removeTavilyKey', (_e, profileId) => this.removeTavilyKey(profileId));
+    ipcMain.handle('profiles:getTavilyKey', (_e, profileId) => this.getTavilyKey(profileId));
   }
 
   linkGoogleAccount(profileId, { tokens, profile }) {
@@ -203,6 +207,32 @@ class ProfileManager {
     delete p.google;
     this.saveProfiles(this.profiles);
     return p;
+  }
+
+  setTavilyKey(profileId, key) {
+    const p = this.profiles.find((x) => x.id === profileId);
+    if (!p) return null;
+    const { encryptToken } = require('./googleAuth');
+    p.tavily = {
+      apiKey: encryptToken(key)
+    };
+    this.saveProfiles(this.profiles);
+    return p;
+  }
+
+  removeTavilyKey(profileId) {
+    const p = this.profiles.find((x) => x.id === profileId);
+    if (!p) return null;
+    delete p.tavily;
+    this.saveProfiles(this.profiles);
+    return p;
+  }
+
+  getTavilyKey(profileId) {
+    const p = this.profiles.find((x) => x.id === profileId);
+    if (!p || !p.tavily || !p.tavily.apiKey) return null;
+    const { decryptToken } = require('./googleAuth');
+    return decryptToken(p.tavily.apiKey);
   }
 }
 

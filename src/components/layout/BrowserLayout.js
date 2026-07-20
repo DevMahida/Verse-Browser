@@ -385,7 +385,7 @@ export default function BrowserLayout() {
 
         {/* AI Sidebar */}
         {isAISidebarOpen && (
-          <div className="w-87.5 border-l border-border bg-background shrink-0 shadow-[-4px_0_24px_-8px_rgba(0,0,0,0.5)] z-20">
+          <div className="border-l border-border bg-background shrink-0 shadow-[-4px_0_24px_-8px_rgba(0,0,0,0.5)] z-20">
             <AISidebar />
           </div>
         )}

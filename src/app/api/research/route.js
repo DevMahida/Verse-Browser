@@ -15,11 +15,11 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Missing research query' }, { status: 400 });
     }
 
-    const apiKey = process.env.TAVILY_API_KEY;
+    const apiKey = req.headers.get('x-tavily-key');
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json(
-        { error: 'Tavily API key not configured. Add TAVILY_API_KEY to your .env.local file.' },
-        { status: 500 }
+        { error: 'Tavily API key not configured. Please connect your API key in the Deep Search settings.' },
+        { status: 401 }
       );
     }
 
@@ -161,11 +161,11 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Missing requestId' }, { status: 400 });
     }
 
-    const apiKey = process.env.TAVILY_API_KEY;
+    const apiKey = req.headers.get('x-tavily-key');
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json(
-        { error: 'Tavily API key not configured.' },
-        { status: 500 }
+        { error: 'Tavily API key not configured. Please connect your API key in the Deep Search settings.' },
+        { status: 401 }
       );
     }
 
