@@ -95,6 +95,8 @@ export const useBrowserStore = create(
   currentAiSessionId: null,
   selectedAiModel: 'meta-llama/llama-3.1-8b-instruct',
   setSelectedAiModel: (model) => set({ selectedAiModel: model }),
+  researchMode: false,
+  setResearchMode: (mode) => set({ researchMode: mode }),
   saveAiSession: async (session) => {
     set((state) => {
       const exists = state.aiChatSessions.find(s => s.id === session.id);
@@ -954,6 +956,7 @@ export const useBrowserStore = create(
         firebaseUid: state.firebaseUid,
         aiChatSessions: state.aiChatSessions,
         selectedAiModel: state.selectedAiModel,
+        researchMode: state.researchMode,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }
