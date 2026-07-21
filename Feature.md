@@ -9,12 +9,16 @@ Below is a comprehensive list of functionalities available in the browser:
 - **Omnibox Search:** Intelligent URL bar that detects valid URLs and domains, and falls back to a Google search for plain text queries.
 - **Navigation Controls:** Standard navigation operations including Back, Forward, Reload, and Home.
 - **Find in Page:** Search for text within the current webpage (Ctrl+F / Cmd+F), complete with match highlighting, counts, and next/prev controls.
+- **Page Zooming:** Zoom in, zoom out, or reset zoom on any webpage.
+- **Print Support:** Native printing capabilities for web pages.
+- **View Source:** Inspect the HTML source code of any webpage using `view-source:` protocol.
 
 ## 2. Advanced Tab Management
 - **Multi-Tab Support:** Open, close, and navigate multiple webpages concurrently.
 - **Drag-and-Drop Tabs:** Reorder tabs seamlessly within the tab bar (powered by `dnd-kit`).
 - **Tab Pinning:** Pin important tabs to the left side of the tab bar to save space.
 - **Split View:** View two tabs side-by-side simultaneously within the same window.
+- **Recently Closed Tabs:** Ability to reopen recently closed tabs with their full history.
 - **Tab Audio Controls:** Automatically detects audio playback. Easily mute or unmute individual tabs directly from the tab bar.
 - **Tab Context Menu:** Right-click tabs to access quick actions: 
   - New Tab to the Right
@@ -38,7 +42,7 @@ Below is a comprehensive list of functionalities available in the browser:
 
 ## 5. Cloud Syncing (Firebase)
 - **Google Authentication:** Sign in with your Google account natively.
-- **Cross-Device Sync:** Your Bookmarks, Browsing History, and User Profile are automatically synced to the cloud via Firebase Firestore, accessible whenever you log in.
+- **Cross-Device Sync:** Your Bookmarks, Browsing History, AI Chat Sessions, and User Profile are automatically synced to the cloud via Firebase Firestore, accessible whenever you log in.
 - **Multi-Account Support:** Seamlessly switch between different synced profiles.
 
 ## 6. History & Bookmarks
@@ -66,3 +70,8 @@ Navigate like a pro with global keyboard shortcuts:
 
 ## 10. Extensions (Preview)
 - **Mock Extension Store:** An interface to manage browser extensions and add-ons (currently in preview state).
+
+## 11. AI Features (Verse Exclusive)
+- **AI Sidebar:** Built-in AI chat sidebar powered by OpenRouter for on-the-fly assistance.
+- **AI Chat Sync:** Chat sessions are synced via Firebase so you can continue conversations across devices.
+- **Research Mode:** Enhanced AI assistance tailored for deep research tasks.

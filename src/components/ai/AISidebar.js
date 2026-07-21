@@ -94,9 +94,9 @@ function ResearchProgress({ status, sources, streamContent, elapsedTime }) {
       {/* Progress header */}
       <div className="flex items-center gap-2">
         <div className="relative w-4 h-4">
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 animate-spin opacity-75" style={{ clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)' }} />
-          <div className="absolute inset-[2px] rounded-full bg-surface" />
-          <div className="absolute inset-[3px] rounded-full bg-gradient-to-r from-violet-500 to-blue-500 animate-pulse" />
+          <div className="absolute inset-0 rounded-full bg-linear-to-r from-violet-500 to-blue-500 animate-spin opacity-75" style={{ clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)' }} />
+          <div className="absolute inset-0.5 rounded-full bg-surface" />
+          <div className="absolute inset-0.75 rounded-full bg-linear-to-r from-violet-500 to-blue-500 animate-pulse" />
         </div>
         <span className="text-xs font-medium text-foreground/80">
           {statusMessages[status] || "Researching..."}
@@ -109,7 +109,7 @@ function ResearchProgress({ status, sources, streamContent, elapsedTime }) {
       {/* Animated progress bar */}
       <div className="h-1 bg-surface-hover rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-violet-500 animate-[shimmer_2s_linear_infinite]"
+          className="h-full rounded-full bg-linear-to-r from-violet-500 via-blue-500 to-violet-500 animate-[shimmer_2s_linear_infinite]"
           style={{ width: '100%', backgroundSize: '200% 100%' }}
         />
       </div>
@@ -925,7 +925,7 @@ export default function AISidebar() {
               <div className="flex flex-col space-y-4">
                 <div>
                   <h2 className="text-xl font-bold text-foreground mb-2">
-                    <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Connect Tavily</span>
+                    <span className="bg-linear-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Connect Tavily</span>
                   </h2>
                   <p className="text-sm text-foreground/70 leading-relaxed mb-4">
                     Deep Search requires your own Tavily API key to perform multi-source research. Your key is encrypted and stored locally per-profile.
@@ -992,7 +992,7 @@ export default function AISidebar() {
                   {researchMode ? (
                     <>
                       <h2 className="text-xl font-bold text-foreground mb-2">
-                        <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Deep Research</span>
+                        <span className="bg-linear-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Deep Research</span>
                       </h2>
                       <p className="text-sm text-foreground/70 leading-relaxed">
                         I&apos;ll search the web from multiple angles, analyze sources, and synthesize a comprehensive report with citations.
@@ -1037,7 +1037,7 @@ export default function AISidebar() {
                             onClick={() => setResearchModel(m.value)}
                             className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                               researchModel === m.value
-                                ? "bg-gradient-to-r from-violet-500/20 to-blue-500/20 text-violet-300 border border-violet-500/30"
+                                ? "bg-linear-to-r from-violet-500/20 to-blue-500/20 text-violet-300 border border-violet-500/30"
                                 : "bg-surface border border-border text-foreground/60 hover:border-border/60"
                             }`}
                           >
@@ -1057,7 +1057,7 @@ export default function AISidebar() {
                             onClick={() => setResearchOutputLength(l)}
                             className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer capitalize ${
                               researchOutputLength === l
-                                ? "bg-gradient-to-r from-violet-500/20 to-blue-500/20 text-violet-300 border border-violet-500/30"
+                                ? "bg-linear-to-r from-violet-500/20 to-blue-500/20 text-violet-300 border border-violet-500/30"
                                 : "bg-surface border border-border text-foreground/60 hover:border-border/60"
                             }`}
                           >
@@ -1121,7 +1121,7 @@ export default function AISidebar() {
                     <button
                       onClick={() => setResearchMode(true)}
                       disabled={isLoading}
-                      className="flex items-center p-2.5 rounded-lg bg-gradient-to-r from-violet-500/5 to-blue-500/5 border border-violet-500/20 hover:border-violet-500/40 hover:from-violet-500/10 hover:to-blue-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer col-span-2"
+                      className="flex items-center p-2.5 rounded-lg bg-linear-to-r from-violet-500/5 to-blue-500/5 border border-violet-500/20 hover:border-violet-500/40 hover:from-violet-500/10 hover:to-blue-500/10 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer col-span-2"
                     >
                       <div className="text-violet-400 mr-2.5 group-hover:text-violet-300 transition-colors"><Globe size={16} /></div>
                       <div className="flex-1">
@@ -1184,7 +1184,7 @@ export default function AISidebar() {
                 <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm ${
                   msg.role === "user"
                     ? msg.isResearch
-                      ? "bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-br-sm whitespace-pre-wrap"
+                      ? "bg-linear-to-r from-violet-600 to-blue-600 text-white rounded-br-sm whitespace-pre-wrap"
                       : "bg-accent text-white rounded-br-sm whitespace-pre-wrap"
                     : "bg-surface border border-border text-foreground rounded-bl-sm"
                 }`}>
@@ -1207,7 +1207,7 @@ export default function AISidebar() {
                     <div className="flex flex-col w-full gap-3">
                       {/* Header */}
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-blue-500/20 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500/20 to-blue-500/20 flex items-center justify-center">
                           <FileCheck size={16} className="text-violet-400" />
                         </div>
                         <div>
@@ -1224,7 +1224,7 @@ export default function AISidebar() {
                         <button
                           onClick={() => handleExport(msg.content, 'pdf', messages[idx - 1]?.content)}
                           disabled={isExporting}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-violet-500/15 to-blue-500/15 border border-violet-500/25 hover:border-violet-500/40 rounded-xl text-violet-300 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-linear-to-r from-violet-500/15 to-blue-500/15 border border-violet-500/25 hover:border-violet-500/40 rounded-xl text-violet-300 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
                         >
                           <Download size={14} />
                           Download PDF
@@ -1404,7 +1404,7 @@ export default function AISidebar() {
             onClick={() => setResearchMode(!researchMode)}
             className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
               researchMode
-                ? "bg-gradient-to-r from-violet-500/15 to-blue-500/15 text-violet-300 border border-violet-500/30 hover:border-violet-500/50"
+                ? "bg-linear-to-r from-violet-500/15 to-blue-500/15 text-violet-300 border border-violet-500/30 hover:border-violet-500/50"
                 : "text-foreground/50 hover:text-foreground/70 bg-surface border border-border hover:border-border/60"
             }`}
             title={researchMode ? "Switch to Chat mode" : "Switch to Deep Research mode"}

@@ -268,7 +268,7 @@ export default function NavigationBar() {
       <div className="flex-1 relative mx-2">
         <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
           <div className="relative flex items-center">
-            <FcGoogle size={18} className="mr-2 opacity-80 grayscale-[20%] hover:grayscale-0 transition-all" />
+            <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
             <button 
               onClick={() => setShowSiteSettings(!showSiteSettings)}
               className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
@@ -305,7 +305,7 @@ export default function NavigationBar() {
               </button>
               <button 
                 onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-reset' })}
-                className="px-2 h-full text-[11px] font-medium text-foreground/80 hover:text-foreground hover:bg-foreground/10 transition-colors flex items-center justify-center min-w-[36px]"
+                className="px-2 h-full text-[11px] font-medium text-foreground/80 hover:text-foreground hover:bg-foreground/10 transition-colors flex items-center justify-center min-w-9"
                 title="Reset zoom"
               >
                 {zoomPercentage}%
@@ -402,6 +402,7 @@ export default function NavigationBar() {
               className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none"
             >
               {userProfilePic ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
               ) : currentProfileId !== 'guest' ? (
                 // eslint-disable-next-line @next/next/no-img-element
