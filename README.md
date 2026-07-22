@@ -4,6 +4,7 @@
   <p><b>The next-generation, AI-powered desktop browser built on modern web technologies.</b></p>
   
   <p>
+    <a href="#about">About</a> •
     <a href="#features">Features</a> •
     <a href="#tech-stack">Tech Stack</a> •
     <a href="#getting-started">Getting Started</a> •
@@ -13,7 +14,7 @@
 
 ---
 
-## 🚀 About the Project
+## <a id="about"></a>🚀 About the Project
 
 **Verse Browser** is a fully functional desktop web browser built from the ground up using Electron and Next.js. It aims to bridge the gap between traditional web browsing and modern AI-assistance workflows. 
 
@@ -21,7 +22,7 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 
 ---
 
-## ✨ Features
+## <a id="features"></a>✨ Features
 
 ### Core Browsing Experience
 - **Chromium Engine:** Fast and secure web rendering powered by Electron.
@@ -50,7 +51,7 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 
 ---
 
-## 🛠️ Tech Stack
+## <a id="tech-stack"></a>🛠️ Tech Stack
 
 - **Framework:** [Next.js 16](https://nextjs.org/) (React 19)
 - **Desktop Runtime:** [Electron](https://www.electronjs.org/)
@@ -62,7 +63,7 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 
 ---
 
-## 🏁 Getting Started
+## <a id="getting-started"></a>🏁 Getting Started
 
 To get a local copy up and running, follow these simple steps.
 
@@ -102,7 +103,7 @@ To get a local copy up and running, follow these simple steps.
 
 ---
 
-## 📂 Architecture Overview
+## <a id="architecture"></a>📂 Architecture Overview
 
 - `/src/app` - Next.js routing and primary entry points.
 - `/src/components` - React UI components (Toolbar, Sidebar, Homepage, Webview Containers).
