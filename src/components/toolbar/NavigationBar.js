@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -14,6 +14,7 @@ import HistoryPopup from "./HistoryPopup";
 import DownloadsPopup from "./DownloadsPopup";
 import BrowserMenu from "./BrowserMenu";
 import ProfileMenu from "./ProfileMenu";
+import ZoomPopup from "./ZoomPopup";
 
 export default function NavigationBar() {
     const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton } = useBrowserStore(
@@ -23,6 +24,10 @@ export default function NavigationBar() {
         tabs: state.tabs,
         activeTabId: state.activeTabId,
         splitTabId: state.splitTabId,
+        openReaderMode: state.openReaderMode,
+        readingList: state.readingList,
+        addToReadingList: state.addToReadingList,
+        removeFromReadingList: state.removeFromReadingList,
       focusedPane: state.focusedPane,
       clearSplitView: state.clearSplitView,
       navigate: state.navigate,
@@ -54,6 +59,7 @@ export default function NavigationBar() {
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showZoomPopup, setShowZoomPopup] = useState(false);
   const [downloadAnimate, setDownloadAnimate] = useState(false);
   const [downloadJustFinished, setDownloadJustFinished] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -71,6 +77,7 @@ export default function NavigationBar() {
   const historyRef = useRef(null);
   const downloadsRef = useRef(null);
   const profileRef = useRef(null);
+  const zoomRef = useRef(null);
 
   useEffect(() => {
     if (window.electron && window.electron.getProfiles) {
@@ -95,6 +102,9 @@ export default function NavigationBar() {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setShowProfileMenu(false);
       }
+      if (zoomRef.current && !zoomRef.current.contains(e.target)) {
+        setShowZoomPopup(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -106,10 +116,11 @@ export default function NavigationBar() {
     else if (showDownloadsPopup) offset = 420;
     else if (showSiteSettings) offset = 250;
     else if (showProfileMenu) offset = 500;
+    else if (showZoomPopup) offset = 200;
     else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
     
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showProfileMenu, isFocused, suggestions.length, setDropdownOffset]);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showProfileMenu, showZoomPopup, isFocused, suggestions.length, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;
@@ -161,6 +172,11 @@ export default function NavigationBar() {
   }, [activeTab]);
 
   const isBookmarked = activeTab && bookmarks.some(b => b.url === activeTab.url);
+  const { readingList, addToReadingList, removeFromReadingList } = useBrowserStore();
+  const isReadingListSaved = activeTab && (readingList || []).some(r => r.url === activeTab.url);
+  const activeReadingListItem = activeTab && (readingList || []).find(r => r.url === activeTab.url);
+  const { openReaderMode } = useBrowserStore();
+  const canReadMode = activeTab && activeTab.url.startsWith('http') && !activeTab.url.startsWith('browser://reader');
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && inputValue.trim() !== '') {
@@ -175,27 +191,26 @@ export default function NavigationBar() {
   };
 
   const handleBack = () => {
-    if (activeTab?.canGoBack) {
-      if (window.electron?.tabManager) {
-        window.electron.tabManager.action({ tabId: activePaneTabId, action: 'goBack' });
-      }
-    } else if (activeTab?.url !== 'browser://newtab') {
-      // Save current URL so we can go "forward" back to it later
-      useBrowserStore.getState().updateTab(activePaneTabId, { fallbackForwardUrl: activeTab?.url });
-      navigate(activePaneTabId, 'browser://newtab');
+    if (activeTab?.historyIndex > 0) {
+      const newIndex = activeTab.historyIndex - 1;
+      const targetUrl = activeTab.history[newIndex];
+      useBrowserStore.getState().updateTab(activePaneTabId, {
+        historyIndex: newIndex,
+        url: targetUrl,
+        title: targetUrl
+      });
     }
   };
 
   const handleForward = () => {
-    // If we are on the new tab page and have a fallback forward URL, restore it!
-    if (activeTab?.url === 'browser://newtab' && activeTab?.fallbackForwardUrl) {
-      navigate(activePaneTabId, activeTab.fallbackForwardUrl);
-      useBrowserStore.getState().updateTab(activePaneTabId, { fallbackForwardUrl: null });
-      return;
-    }
-
-    if (activeTab?.canGoForward && window.electron?.tabManager) {
-      window.electron.tabManager.action({ tabId: activePaneTabId, action: 'goForward' });
+    if (activeTab?.history && activeTab.historyIndex < activeTab.history.length - 1) {
+      const newIndex = activeTab.historyIndex + 1;
+      const targetUrl = activeTab.history[newIndex];
+      useBrowserStore.getState().updateTab(activePaneTabId, {
+        historyIndex: newIndex,
+        url: targetUrl,
+        title: targetUrl
+      });
     }
   };
 
@@ -213,8 +228,8 @@ export default function NavigationBar() {
     navigate(activePaneTabId, 'browser://newtab');
   };
 
-  const canGoBack = activeTab?.canGoBack || activeTab?.url !== 'browser://newtab';
-  const canGoForward = activeTab?.canGoForward || (activeTab?.url === 'browser://newtab' && !!activeTab?.fallbackForwardUrl);
+  const canGoBack = activeTab?.historyIndex > 0;
+  const canGoForward = activeTab?.history && activeTab.historyIndex < activeTab.history.length - 1;
 
   const activeDownload = (downloads || []).find(d => d.state === 'progressing');
   const downloadProgress = activeDownload && activeDownload.totalBytes > 0 
@@ -268,14 +283,37 @@ export default function NavigationBar() {
       <div className="flex-1 relative mx-2">
         <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
           <div className="relative flex items-center">
-            <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
-            <button 
-              onClick={() => setShowSiteSettings(!showSiteSettings)}
-              className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
-              title="Site settings"
-            >
-              <Shield size={14} />
-            </button>
+            {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
+              <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
+            ) : (
+              <button 
+                onClick={() => setShowSiteSettings(!showSiteSettings)}
+                className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
+                title="Site settings"
+              >
+                <Shield size={14} />
+              </button>
+            )}
+            {canReadMode && (
+              <button 
+                onClick={async () => {
+                  let liveHtml = null;
+                  try {
+                    liveHtml = await window.electron.tabManager.executeJavaScript({ 
+                      tabId: activePaneTabId, 
+                      code: 'document.documentElement.outerHTML' 
+                    });
+                  } catch (e) {
+                    console.error("Failed to get live HTML for reader mode:", e);
+                  }
+                  openReaderMode(activeTab.url, liveHtml);
+                }}
+                className="mr-2 text-foreground/50 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-500/10"
+                title="Enter Reader Mode"
+              >
+                <BookOpen size={14} />
+              </button>
+            )}
             {showSiteSettings && (
               <SiteSettingsPopup 
                 url={activeTab?.url} 
@@ -295,28 +333,21 @@ export default function NavigationBar() {
             placeholder="Ask Google or type a URL"
           />
           {zoomPercentage !== 100 && (
-            <div className="flex items-center ml-1 bg-foreground/5 rounded-md border border-border/50 h-6">
+            <div className="relative flex items-center ml-1" ref={zoomRef}>
               <button 
-                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-out' })}
-                className="px-1.5 h-full text-foreground/70 hover:text-foreground hover:bg-foreground/10 rounded-l-md transition-colors flex items-center justify-center"
-                title="Zoom Out"
+                onClick={() => setShowZoomPopup(!showZoomPopup)}
+                className="p-1 rounded-md transition-colors text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
+                title="Zoom: this page is zoomed"
               >
-                <Minus size={12} />
+                <ZoomIn size={16} />
               </button>
-              <button 
-                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-reset' })}
-                className="px-2 h-full text-[11px] font-medium text-foreground/80 hover:text-foreground hover:bg-foreground/10 transition-colors flex items-center justify-center min-w-9"
-                title="Reset zoom"
-              >
-                {zoomPercentage}%
-              </button>
-              <button 
-                onClick={() => window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'zoom-in' })}
-                className="px-1.5 h-full text-foreground/70 hover:text-foreground hover:bg-foreground/10 rounded-r-md transition-colors flex items-center justify-center"
-                title="Zoom In"
-              >
-                <Plus size={12} />
-              </button>
+              {showZoomPopup && (
+                <ZoomPopup 
+                  onClose={() => setShowZoomPopup(false)} 
+                  zoomPercentage={zoomPercentage}
+                  activePaneTabId={activePaneTabId}
+                />
+              )}
             </div>
           )}
           <button 
@@ -330,6 +361,25 @@ export default function NavigationBar() {
             title={isBookmarked ? "Remove bookmark" : "Bookmark this tab"}
           >
             <Star size={16} className={isBookmarked ? "fill-current" : ""} />
+          </button>
+          
+          <button 
+            onClick={() => {
+              if (isReadingListSaved && activeReadingListItem) {
+                removeFromReadingList(activeReadingListItem.id);
+              } else if (activeTab) {
+                addToReadingList(activeTab.url, activeTab.title);
+              }
+            }}
+            className={clsx(
+              "p-1 rounded-md transition-colors ml-1",
+              isReadingListSaved 
+                ? "text-blue-400 bg-blue-400/10 hover:bg-blue-400/20" 
+                : "text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
+            )}
+            title={isReadingListSaved ? "Remove from Reading List" : "Add to Reading List"}
+          >
+            <Bookmark size={16} className={isReadingListSaved ? "fill-current" : ""} />
           </button>
         </div>
         {isFocused && suggestions.length > 0 && (

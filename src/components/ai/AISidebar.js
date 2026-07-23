@@ -304,28 +304,17 @@ export default function AISidebar() {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, format, userPrompt })
-      });
-      if (!res.ok) throw new Error("Export failed");
-      
-      // Get the suggested filename from the response headers, or generate a fallback
-      const contentDisposition = res.headers.get("Content-Disposition");
-      let filename = `export.${format}`;
-      if (contentDisposition && contentDisposition.includes('filename="')) {
-        const matches = /filename="([^"]+)"/.exec(contentDisposition);
-        if (matches != null && matches[1]) {
-          filename = matches[1];
-        }
+      const result = await window.electron.exportDocument({ content, format, userPrompt });
+      if (!result || !result.success) {
+        throw new Error(result?.error || "Export failed");
       }
-
-      const blob = await res.blob();
+      
+      // IPC returns a buffer and a filename
+      const blob = new Blob([result.buffer], { type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+      a.download = result.filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -425,28 +414,24 @@ export default function AISidebar() {
       }
 
       abortControllerRef.current = new AbortController();
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          endpoint,
-          payload: buildPayload({
-            text: content.substring(0, 15000),
-            title: currentTab.title || "",
-            url: currentTab.url || "",
-            ...extraParams
-          })
+      // Use IPC for AI requests instead of Next.js API route
+      const result = await window.electron.aiRequest({
+        endpoint,
+        payload: buildPayload({
+          text: content.substring(0, 15000),
+          title: currentTab.title || "",
+          url: currentTab.url || "",
+          ...extraParams
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
-
+      if (abortControllerRef.current.signal.aborted) throw new Error("AbortError");
+      if (result.error) throw new Error(result.error);
+      
       let responseText = "No response received.";
-      if (data.answer) responseText = data.answer;
-      else if (data.result) responseText = data.result;
-      else if (data.faqs) responseText = Array.isArray(data.faqs) ? data.faqs.join("\n\n") : data.faqs;
+      if (result.answer) responseText = result.answer;
+      else if (result.result) responseText = result.result;
+      else if (result.faqs) responseText = Array.isArray(result.faqs) ? result.faqs.join("\n\n") : result.faqs;
 
       setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
     } catch (err) {
@@ -498,19 +483,28 @@ export default function AISidebar() {
 
       abortControllerRef.current = new AbortController();
 
-      const res = await fetch("/api/research", {
+      // Build the research input — optionally include page context
+      let researchInput = query;
+      if (pageContext && pageContext.trim()) {
+        researchInput = `${query}\n\nContext from current webpage:\n${pageContext.substring(0, 4000)}`;
+      }
+
+      const tavilyPayload = {
+        input: researchInput,
+        model: researchModel,
+        stream: true,
+        output_length: researchOutputLength,
+        citation_format: 'numbered',
+      };
+
+      const res = await fetch("https://api.tavily.com/research", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-tavily-key": activeKey
+          "Authorization": `Bearer ${activeKey.trim()}`
         },
         signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          query,
-          model: researchModel,
-          outputLength: researchOutputLength,
-          pageContext,
-        }),
+        body: JSON.stringify(tavilyPayload),
       });
 
       if (!res.ok) {
@@ -619,13 +613,19 @@ export default function AISidebar() {
         // ── JSON response (non-streaming / polling fallback) ──
         const data = await res.json();
 
-        if (data.requestId && data.status !== "completed") {
+        if (data.request_id && data.status !== "completed") {
           // Polling mode
           let pollResult = data;
           while (pollResult.status !== "completed" && pollResult.status !== "failed") {
             await new Promise(r => setTimeout(r, 3000));
-            const pollRes = await fetch(`/api/research?requestId=${pollResult.requestId}`, {
+            const pollRes = await fetch("https://api.tavily.com/get_research", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${activeKey.trim()}`
+              },
               signal: abortControllerRef.current.signal,
+              body: JSON.stringify({ request_id: pollResult.request_id }),
             });
             pollResult = await pollRes.json();
 
@@ -721,25 +721,22 @@ export default function AISidebar() {
       const selectedText = await getPageContent("selected");
 
       abortControllerRef.current = new AbortController();
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          endpoint: "/rag",
-          payload: buildPayload({
-            text: (pageText || "").substring(0, 15000),
-            query,
-            title: currentTab.title || "",
-            url: currentTab.url || "",
-            selected_text: (selectedText || "").substring(0, 2000),
-          })
+      // Use IPC for RAG chat request
+      const result = await window.electron.aiRequest({
+        endpoint: "/rag",
+        payload: buildPayload({
+          text: (pageText || "").substring(0, 15000),
+          query,
+          title: currentTab.title || "",
+          url: currentTab.url || "",
+          selected_text: (selectedText || "").substring(0, 2000),
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
-      setMessages(prev => [...prev, { role: "assistant", content: data.answer || data.result || "No response received.", model: selectedAiModel }]);
+      if (abortControllerRef.current.signal.aborted) throw new Error("AbortError");
+      if (result.error) throw new Error(result.error);
+      
+      setMessages(prev => [...prev, { role: "assistant", content: result.answer || result.result || "No response received.", model: selectedAiModel }]);
     } catch (e) {
       if (e.name === "AbortError") {
         setMessages(prev => [...prev, { role: "assistant", content: "Response stopped.", model: selectedAiModel }]);

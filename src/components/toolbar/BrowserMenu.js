@@ -95,7 +95,9 @@ export default function BrowserMenu() {
   }, []);
 
   useEffect(() => {
-    // Set a large offset to allow the big dropdown
+    // Native WebContentsView renders at the OS level, above all DOM elements.
+    // We MUST set dropdownOffset to hide the native view and show a screenshot
+    // so that the menu dropdown is visible on top.
     if (isOpen) {
       setDropdownOffset(500);
     } else {
@@ -105,6 +107,24 @@ export default function BrowserMenu() {
 
   const handleAction = (action, close = true) => {
     window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action });
+    
+    // For zoom actions, trigger a screenshot re-capture by briefly toggling the offset.
+    // This makes the updated zoom level visible in the screenshot while the menu stays open.
+    if (!close && (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset')) {
+      // The WebviewContainer's screenshot capture depends on tab.zoomLevel,
+      // which gets updated via the zoom-changed event from the native side.
+      // We give it a brief moment to process, then force a re-capture by
+      // toggling dropdownOffset (the screenshot useEffect depends on it).
+      setTimeout(() => {
+        if (isOpen) {
+          setDropdownOffset(0);
+          setTimeout(() => {
+            if (isOpen) setDropdownOffset(500);
+          }, 100);
+        }
+      }, 150);
+    }
+    
     if (close) {
       setIsOpen(false);
       setTimeout(() => setActiveMenu('main'), 200);
@@ -286,7 +306,7 @@ export default function BrowserMenu() {
         }} 
       />
       <MenuItem icon={List} label="Bookmark manager" shortcut="Ctrl+Shift+O" onClick={() => { openBookmarksTab(); handleClose(); }} />
-      <MenuItem icon={Bookmark} label="Reading list" disabled />
+      <MenuItem icon={Bookmark} label="Reading list" onClick={() => { useBrowserStore.getState().openReadingListTab(); handleClose(); }} />
       <MenuDivider />
       <MenuItem 
         label={bookmarkBarVisibility === 'always' ? "Hide bookmarks bar" : "Show bookmarks bar"} 
@@ -382,14 +402,14 @@ export default function BrowserMenu() {
       </button>
       
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-border rounded-xl shadow-xl py-1.5 z-[100] animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+        <div className="absolute right-0 top-full mt-2 w-72 bg-surface border border-border rounded-xl shadow-xl py-1.5 z-100 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
           {renderContent()}
         </div>
       )}
 
       {/* QR Code Modal Overlay */}
       {qrCodeUrl && (
-        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center animate-in fade-in" onClick={() => { setQrCodeUrl(null); handleClose(); }}>
+        <div className="fixed inset-0 z-200 bg-black/60 flex items-center justify-center animate-in fade-in" onClick={() => { setQrCodeUrl(null); handleClose(); }}>
           <div 
             className="bg-surface border border-border p-8 rounded-2xl shadow-2xl flex flex-col items-center animate-in zoom-in-95"
             onClick={e => e.stopPropagation()}
@@ -398,7 +418,7 @@ export default function BrowserMenu() {
             <div className="bg-white p-4 rounded-xl shadow-inner">
               <QRCodeSVG value={qrCodeUrl} size={200} level="H" includeMargin={false} />
             </div>
-            <p className="mt-4 text-sm text-foreground/70 text-center max-w-[200px] break-all line-clamp-2" title={qrCodeUrl}>
+            <p className="mt-4 text-sm text-foreground/70 text-center max-w-50 break-all line-clamp-2" title={qrCodeUrl}>
               {qrCodeUrl}
             </p>
             <button 

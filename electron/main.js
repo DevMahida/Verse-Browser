@@ -78,8 +78,15 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
     searchParams.append('incognito', 'true');
   }
   const qs = searchParams.toString();
-  if (qs) url += `?${qs}`;
-  win.loadURL(url);
+  
+  if (isDev) {
+    if (qs) url += `?${qs}`;
+    win.loadURL(url);
+  } else {
+    // In production, load the statically exported Next.js HTML file
+    const indexPath = path.join(__dirname, '..', 'out', 'index.html');
+    win.loadFile(indexPath, { search: qs });
+  }
 
   win.on('closed', () => {
     allWindows.delete(win);
@@ -603,6 +610,179 @@ app.whenReady().then(async () => {
       return false;
     }
   });
+
+  // --- Document Export (replaces Next.js API route + Puppeteer) ---
+  ipcMain.handle('export-document', async (event, { content, format, userPrompt }) => {
+    try {
+      const { marked } = require('marked');
+      let HTMLtoDOCX;
+      try { HTMLtoDOCX = require('html-to-docx'); } catch(e) {}
+
+      if (!content) return { success: false, error: 'Content is required' };
+      if (!['pdf', 'docx'].includes(format)) return { success: false, error: 'Invalid format' };
+
+      let filename = `export.${format}`;
+      let finalContent = content;
+
+      if (userPrompt) {
+        const sanitizedPrompt = userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').toLowerCase();
+        filename = `${sanitizedPrompt || 'export'}.${format}`;
+        finalContent = `**Instruction:** ${userPrompt}\n\n---\n\n${content}`;
+      }
+
+      const htmlContent = marked.parse(finalContent);
+      const styledHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 2rem; }
+              h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; }
+              p { margin-bottom: 1em; }
+              code { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; background-color: #f6f8fa; padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
+              pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+              pre code { background-color: transparent; padding: 0; }
+              blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
+              table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+              th, td { padding: 6px 13px; border: 1px solid #dfe2e5; }
+              th { font-weight: 600; background-color: #f6f8fa; }
+            </style>
+          </head>
+          <body>${htmlContent}</body>
+        </html>
+      `;
+
+      let buffer;
+      if (format === 'pdf') {
+        const printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+        await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(styledHtml)}`);
+        // Wait a tiny bit for render
+        await new Promise(r => setTimeout(r, 200));
+        buffer = await printWin.webContents.printToPDF({
+          printBackground: true,
+          margins: { top: 1, bottom: 1, left: 1, right: 1 }
+        });
+        printWin.destroy();
+      } else if (format === 'docx' && HTMLtoDOCX) {
+        buffer = await HTMLtoDOCX(styledHtml, null, {
+          table: { row: { cantSplit: true } },
+          footer: true,
+          pageNumber: true,
+        });
+      }
+      
+      return { success: true, buffer, filename };
+    } catch (e) {
+      console.error('Export error:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // --- AI Assistant IPC Handlers ---
+  const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+  const DEFAULT_MODEL = 'meta-llama/llama-3.1-8b-instruct';
+
+  ipcMain.handle('ai-request', async (event, payload) => {
+    try {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) return { error: 'Server API key not configured.' };
+
+      const { endpoint, payload: reqPayload } = payload;
+      const { text = '', html = '', query = '', title = '', url = '', selected_text = '', extraction_goal = '', platform = '', style = '', target_language = '' } = reqPayload;
+
+      const pageCtx = `Page Title: ${title || 'Unknown'}\nPage URL: ${url || 'Unknown'}`;
+      const contentSnippet = (text || '').substring(0, 12000);
+
+      let systemPrompt = 'You are a helpful AI assistant.';
+      let userContent = `${pageCtx}\n\nContent:\n${contentSnippet}\n\nQuery: ${query || 'Please help with this content.'}`;
+      let key = 'result';
+
+      switch (endpoint) {
+        case '/summarize':
+          systemPrompt = 'You are a helpful AI assistant that summarizes web page content concisely and clearly. Use markdown formatting with headers and bullet points.';
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease provide a clear, concise summary of this page.`;
+          break;
+        case '/explain':
+          systemPrompt = 'You are a helpful AI tutor that explains articles in simple, easy-to-understand language. Use analogies and plain English.';
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease explain this article in simple terms.`;
+          break;
+        case '/key-points':
+          systemPrompt = 'You are a helpful assistant that extracts the most important key points from web content. Format as a numbered or bulleted markdown list.';
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nList the key points from this page.`;
+          break;
+        case '/faqs':
+          systemPrompt = 'You are a helpful assistant that generates frequently asked questions (FAQs) with answers based on web content. Format as markdown with bold questions.';
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nGenerate 5 relevant FAQs with answers based on this page.`;
+          key = 'faqs';
+          break;
+        case '/study-notes':
+          systemPrompt = 'You are a study assistant that creates detailed, well-structured study notes from web content. Use headers, bullet points, and highlight key terms.';
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate comprehensive study notes from this page.`;
+          break;
+        case '/extract':
+          systemPrompt = `You are a data extraction assistant. Extract all ${extraction_goal || 'relevant data'} from the provided content. Return them as a clean markdown list.`;
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nExtract all ${extraction_goal || 'relevant information'} from this page.`;
+          break;
+        case '/generate-post':
+          systemPrompt = `You are a social media content creator. Create an engaging ${platform || 'social media'} post based on the page content. Be concise, engaging, and use relevant hashtags if appropriate.`;
+          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate a ${platform || 'social media'} post about this page.`;
+          break;
+        case '/rewrite':
+          systemPrompt = `You are a writing assistant that rewrites content in a ${style || 'professional'} style. Maintain the original meaning while improving the tone and clarity.`;
+          userContent = `${pageCtx}\n\nContent to rewrite:\n${contentSnippet}\n\nRewrite this content in a ${style || 'professional'} style.`;
+          break;
+        case '/translate':
+          systemPrompt = `You are a professional translator. Translate the given text accurately to ${target_language || 'Spanish'}. Preserve the meaning and tone.`;
+          userContent = `Translate the following text to ${target_language || 'Spanish'}:\n\n${contentSnippet}`;
+          break;
+        case '/rag':
+          const pageText = (text || html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 12000);
+          const selectionNote = selected_text ? `\n\nUser has selected this text on the page: "${selected_text.substring(0, 1000)}"` : '';
+          systemPrompt = 'You are a helpful AI assistant embedded in a web browser. You have access to the current web page content and can answer questions about it accurately. Be concise but thorough. Use markdown formatting where appropriate.';
+          userContent = `${pageCtx}\n\nPage Content:\n${pageText}${selectionNote}\n\nUser Question: ${query}`;
+          key = 'answer';
+          break;
+      }
+
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey.trim()}`,
+          'HTTP-Referer': 'https://verse-browser.app',
+          'X-Title': 'Verse Browser AI',
+        },
+        body: JSON.stringify({
+          model: reqPayload.model || DEFAULT_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+          max_tokens: 1500,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return { error: `OpenRouter error: ${errText}` };
+      }
+
+      const data = await response.json();
+      const answer = data.choices?.[0]?.message?.content || 'No response received.';
+      return { [key]: answer, answer, result: answer };
+    } catch (e) {
+      console.error('AI Request Error:', e);
+      return { error: e.message };
+    }
+  });
+
+  // Since Tavily streaming involves Server-Sent Events, we can either proxy the stream or just
+  // let the renderer handle the fetch itself since it's an external API.
+  // Actually, standard fetch() in the Electron renderer works perfectly fine for external APIs, 
+  // bypassing the need for an IPC wrapper entirely!
+  // We will just let AISidebar use native browser fetch() directly to Tavily and OpenRouter.
 
   // --- Downloads Manager ---
   ipcMain.on('update-download-settings', (event, settings) => {

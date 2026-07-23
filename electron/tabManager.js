@@ -42,7 +42,6 @@ function initTabManager() {
     // navigator.webdriver, window.chrome, navigator.plugins.
     // We must address ALL of them or sign-in gets blocked.
 
-    const viewSession = view.webContents.session;
 
 
     // Make sure we have a solid background color so it's not transparent
@@ -137,18 +136,12 @@ function initTabManager() {
       });
     });
 
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      if (!sender.isDestroyed()) {
-        sender.send('webview-new-window', { url });
-      }
-      return { action: 'deny' };
-    });
 
     if (url) {
       if (url.startsWith('view-source:')) {
         const target = url.replace('view-source:', '');
         const path = require('path');
-        view.webContents.loadFile(path.join(__dirname, 'view-source.html'), { query: { url: target, partition: partition || 'persist:main' } }).then(() => {
+        view.webContents.loadFile(path.join(__dirname, 'view-source.html'), { query: { url: target, partition: finalPartition || 'persist:main' } }).then(() => {
           const { net } = require('electron');
           net.fetch(target, { session: view.webContents.session })
             .then(res => res.text())
@@ -229,7 +222,6 @@ function initTabManager() {
   });
 
   ipcMain.on('tab-update-bounds', (event, { tabId, bounds, isActive }) => {
-    console.log(`[TabManager] tab-update-bounds ${tabId} isActive:${isActive} bounds:`, bounds);
     
     const view = views.get(tabId);
     const window = BrowserWindow.fromWebContents(event.sender);
@@ -243,12 +235,10 @@ function initTabManager() {
         if (!isAttached) {
           window.contentView.addChildView(view);
           view._isAttached = true;
-        } else {
-          // Since we can't easily check the top-most view due to wrapper objects, we safely remove and re-add.
-          try { window.contentView.removeChildView(view); } catch(e) {}
-          window.contentView.addChildView(view);
-          view._isAttached = true;
         }
+        // If already attached, we do NOT remove and re-add it.
+        // Doing so breaks the Chromium rendering pipeline on Windows (freezing repaints, e.g. for zooming).
+        // Since inactive tabs are detached, an attached tab is already guaranteed to be visible.
       } else if (!isActive && isAttached) {
         try { window.contentView.removeChildView(view); } catch(e) {}
         view._isAttached = false;
@@ -375,9 +365,6 @@ function initTabManager() {
         break;
       case 'stop-find-in-page':
         view.webContents.stopFindInPage('clearSelection');
-        break;
-      case 'save-page':
-        view.webContents.downloadURL(view.webContents.getURL());
         break;
     }
   });

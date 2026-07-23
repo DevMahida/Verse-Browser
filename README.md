@@ -40,6 +40,7 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 - **Multi-Model Support:** Connects via OpenRouter to seamlessly switch between Meta Llama, Google Gemini, Anthropic Claude, DeepSeek, and OpenAI models.
 - **Context-Aware:** The AI can read the active tab's content to summarize, explain, or answer direct questions about the page you're viewing.
 - **Deep Research Mode:** Utilizing Tavily API, the browser can autonomously search the web, analyze multiple sources, and synthesize comprehensive reports.
+- **Report Exports:** Export generated research reports directly to PDF or DOCX formats.
 
 ### Cross-Device Syncing
 - **Firebase Integration:** Securely sync your bookmarks, browsing history, sent tabs, reading list, and AI chat sessions across all your devices using Google Authentication.
@@ -53,7 +54,7 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 
 ## <a id="tech-stack"></a>🛠️ Tech Stack
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (React 19)
+- **Framework:** [Next.js 16](https://nextjs.org/) (React 19, Static Export)
 - **Desktop Runtime:** [Electron](https://www.electronjs.org/)
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
 - **State Management:** [Zustand](https://zustand-demo.pmnd.rs/) (with persistence)
@@ -87,13 +88,18 @@ To get a local copy up and running, follow these simple steps.
 3. **Set up Environment Variables**
    Create a `.env.local` file in the root directory and add your API keys:
    ```env
+   # Firebase Config (for Sync)
    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+   
+   # AI Backend (required for AI Sidebar)
+   OPENROUTER_API_KEY=your_openrouter_api_key
    ```
+   *(Note: Tavily API keys are entered securely through the browser's UI).*
 
 4. **Run the Browser**
    To start the Next.js frontend development server and launch the Electron application simultaneously:
@@ -105,10 +111,10 @@ To get a local copy up and running, follow these simple steps.
 
 ## <a id="architecture"></a>📂 Architecture Overview
 
-- `/src/app` - Next.js routing and primary entry points.
+- `/src/app` - Next.js routing and primary UI entry point (exported as static HTML).
 - `/src/components` - React UI components (Toolbar, Sidebar, Homepage, Webview Containers).
 - `/src/store` - Zustand state stores (`useBrowserStore.js`).
-- `/electron` - Electron main process scripts (`main.js`, `tabManager.js`, `preload.js`).
+- `/electron` - Electron main process scripts (`main.js`, `tabManager.js`, `preload.js`). Handles native APIs, Chromium views, and secure IPC backend requests for AI functionality.
 - `/public` - Static assets and icons.
 
 ---

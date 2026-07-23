@@ -6,6 +6,8 @@ import { useShallow } from 'zustand/react/shallow';
 import Homepage from "../homepage/Homepage";
 import HistoryPage from "./HistoryPage";
 import BookmarksPage from "./BookmarksPage";
+import ReadingListPage from "./ReadingListPage";
+import ReaderPage from "./ReaderPage";
 import DownloadsPage from "./DownloadsPage";
 import ExtensionsPage from "./ExtensionsPage";
 import ExtensionStorePage from "./ExtensionStorePage";
@@ -58,7 +60,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
         case 'did-navigate-in-page':
           internalUrl.current = data.url;
           if (!isIncognitoWindow) addToHistory(data.url);
-          updateTab(tab.id, { url: data.url, canGoBack: data.canGoBack, canGoForward: data.canGoForward, error: null });
+          updateTab(tab.id, { url: data.url, error: null });
           break;
         case 'page-title-updated':
           updateTab(tab.id, { title: data.title });
@@ -74,7 +76,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
           updateTab(tab.id, { isLoading: true, error: null });
           break;
         case 'did-stop-loading':
-          updateTab(tab.id, { isLoading: false, canGoBack: data.canGoBack, canGoForward: data.canGoForward });
+          updateTab(tab.id, { isLoading: false });
           if (internalUrl.current && internalUrl.current.includes('google.com')) checkLoginState();
           break;
         case 'did-fail-load':
@@ -116,13 +118,13 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       
       window.electron.tabManager.updateBounds({
         tabId: tab.id,
-        bounds: { 
+        bounds: isHidden ? { x: -10000, y: -10000, width: 0, height: 0 } : { 
           x: Math.round(rect.x), 
           y: Math.round(rect.y), 
           width: Math.round(rect.width), 
           height: Math.round(rect.height)
         },
-        isActive: isActive && !isHidden
+        isActive: isActive // Always keep the active tab attached to prevent Chromium network throttling
       });
     };
 
@@ -311,6 +313,30 @@ export default function WebviewContainer() {
               className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
             >
               <BookmarksPage />
+            </div>
+          );
+        }
+
+        if (tab.url === 'browser://readinglist') {
+          return (
+            <div 
+              key={tab.id} 
+              onClick={handleClick}
+              className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
+            >
+              <ReadingListPage />
+            </div>
+          );
+        }
+
+        if (tab.url.startsWith('browser://reader')) {
+          return (
+            <div 
+              key={tab.id} 
+              onClick={handleClick}
+              className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
+            >
+              <ReaderPage />
             </div>
           );
         }

@@ -90,6 +90,12 @@ contextBridge.exposeInMainWorld("electron", {
   // Custom Window Dragging
   moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
 
+  // Document Export (PDF)
+  exportDocument: (data) => ipcRenderer.invoke('export-document', data),
+
+  // AI Assistant Request
+  aiRequest: (payload) => ipcRenderer.invoke('ai-request', payload),
+
   // --- Database Methods removed for Firebase ---
 
   // --- Downloads Manager ---

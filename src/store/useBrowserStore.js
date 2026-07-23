@@ -47,6 +47,7 @@ export const useBrowserStore = create(
       firebaseUid: null,
       lastHistoryDocId: null,
       history: [],
+  readingList: [],
   bookmarks: [],
   bookmarkBarVisibility: 'always', // 'always' or 'new-tab'
   showHomeButton: false, // Hidden by default like Chrome
@@ -71,10 +72,9 @@ export const useBrowserStore = create(
       url: 'browser://newtab', 
       favicon: null,
       isLoading: false,
-      canGoBack: false,
-      canGoForward: false,
       error: null,
-      fallbackForwardUrl: null,
+      history: ['browser://newtab'],
+      historyIndex: 0,
       isPlayingAudio: false,
       isMuted: false,
       isPinned: false,
@@ -221,6 +221,32 @@ export const useBrowserStore = create(
       }
     } catch (e) { console.error("Failed to fetch bookmarks", e); }
 
+    // Fetch Reading List
+    try {
+      const querySnapshot = await getDocs(collection(db, "users", state.firebaseUid, "profiles", fbProfile, "readingList"));
+      const firebaseReadingList = [];
+      querySnapshot.forEach((doc) => {
+        firebaseReadingList.push({ id: doc.id, ...doc.data() });
+      });
+      
+      if (firebaseReadingList.length > 0) {
+        const currentReadingList = get().readingList || [];
+        const merged = [...currentReadingList];
+        let changed = false;
+        
+        firebaseReadingList.forEach(fbItem => {
+          if (!merged.find(b => b.url === fbItem.url)) {
+            merged.push(fbItem);
+            changed = true;
+          }
+        });
+        
+        if (changed || currentReadingList.length === 0) {
+          set({ readingList: merged });
+        }
+      }
+    } catch (e) { console.error("Failed to fetch reading list", e); }
+
     // Fetch AI Chat Sessions (with messages from sub-collections)
     try {
       const aiQuerySnapshot = await getDocs(collection(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions"));
@@ -290,16 +316,29 @@ export const useBrowserStore = create(
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     if (window.electron && window.electron.themeAPI) {
       window.electron.themeAPI.set(newTheme);
-    } else {
-      set({ theme: newTheme });
     }
+    set({ theme: newTheme });
   },
 
   // Actions
   navigate: (id, input) => set((state) => {
     const finalUrl = formatUrl(input);
     return {
-      tabs: state.tabs.map(tab => tab.id === id ? { ...tab, url: finalUrl, title: finalUrl } : tab)
+      tabs: state.tabs.map(tab => {
+        if (tab.id === id) {
+          if (tab.url === finalUrl) return { ...tab, url: finalUrl };
+          const newHistory = (tab.history || []).slice(0, (tab.historyIndex || 0) + 1);
+          newHistory.push(finalUrl);
+          return { 
+            ...tab, 
+            url: finalUrl, 
+            title: finalUrl,
+            history: newHistory,
+            historyIndex: newHistory.length - 1
+          };
+        }
+        return tab;
+      })
     };
   }),
 
@@ -311,10 +350,9 @@ export const useBrowserStore = create(
       url, 
       favicon: null,
       isLoading: false,
-      canGoBack: false,
-      canGoForward: false,
       error: null,
-      fallbackForwardUrl: null,
+      history: [url],
+      historyIndex: 0,
       isPlayingAudio: false,
       isMuted: false,
       isPinned: false,
@@ -367,10 +405,9 @@ export const useBrowserStore = create(
           url: 'browser://newtab', 
           favicon: null,
           isLoading: false,
-          canGoBack: false,
-          canGoForward: false,
           error: null,
-          fallbackForwardUrl: null,
+          history: ['browser://newtab'],
+          historyIndex: 0,
           isPlayingAudio: false,
           isMuted: false,
           isPinned: false,
@@ -425,10 +462,9 @@ export const useBrowserStore = create(
       url: lastClosed.url || 'browser://newtab', 
       favicon: lastClosed.favicon || null,
       isLoading: false, 
-      canGoBack: false, 
-      canGoForward: false, 
       error: null,
-      fallbackForwardUrl: null, 
+      history: [lastClosed.url || 'browser://newtab'],
+      historyIndex: 0,
       isPlayingAudio: false, 
       isMuted: false, 
       isPinned: false, 
@@ -459,7 +495,30 @@ export const useBrowserStore = create(
   setActiveTab: (id) => set({ activeTabId: id }),
 
   updateTab: (id, updates) => set((state) => ({
-    tabs: state.tabs.map(tab => tab.id === id ? { ...tab, ...updates } : tab)
+    tabs: state.tabs.map(tab => {
+      if (tab.id === id) {
+        // If webview internally navigated (and this isn't a deliberate history back/forward step), push to our history
+        if (updates.url && updates.url !== tab.url && updates.historyIndex === undefined) {
+          const currentHistUrl = tab.history && tab.history[tab.historyIndex];
+          if (updates.url !== currentHistUrl) {
+            const newHistory = (tab.history || []).slice(0, (tab.historyIndex || 0) + 1);
+            
+            // Avoid duplicate pushes for redirects (if last URL in history is exactly this one)
+            if (newHistory[newHistory.length - 1] !== updates.url) {
+              newHistory.push(updates.url);
+              return { 
+                ...tab, 
+                ...updates, 
+                history: newHistory,
+                historyIndex: newHistory.length - 1
+              };
+            }
+          }
+        }
+        return { ...tab, ...updates };
+      }
+      return tab;
+    })
   })),
 
   setZoomLevel: (id, level) => set((state) => ({
@@ -598,6 +657,27 @@ export const useBrowserStore = create(
         fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
       }],
       activeTabId: newId,
+    };
+  }),
+
+  openReadingListTab: () => set((state) => {
+    const existingTab = state.tabs.find(t => t.url === 'browser://readinglist');
+    if (existingTab) return { activeTabId: existingTab.id };
+    const newId = Date.now().toString();
+    return {
+      tabs: [...state.tabs, { 
+        id: newId, title: 'Reading List', url: 'browser://readinglist', favicon: null,
+        isLoading: false, canGoBack: false, canGoForward: false, error: null,
+        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
+      }],
+      activeTabId: newId,
+    };
+  }),
+
+  openReaderMode: (url, html) => set((state) => {
+    const readerUrl = `browser://reader?url=${encodeURIComponent(url)}`;
+    return {
+      tabs: state.tabs.map(tab => tab.id === state.activeTabId ? { ...tab, url: readerUrl, fallbackForwardUrl: url, readerHtml: html } : tab)
     };
   }),
 
@@ -765,6 +845,64 @@ export const useBrowserStore = create(
       try {
         await deleteDoc(doc(db, "users", uid, "profiles", fbProfile, "bookmarks", id));
       } catch (e) { console.error(e); }
+    }
+  },
+
+  // Reading List Actions
+  addToReadingList: async (url, title) => {
+    if (url.startsWith('browser://')) return;
+    const state = get();
+    const isSaved = (state.readingList || []).some(b => b.url === url);
+    const uid = state.firebaseUid;
+    const fbProfile = getFbProfile(state);
+
+    if (!isSaved) {
+      const newId = Date.now().toString();
+      const safeTitle = title === undefined ? url : title;
+      const newItem = { id: newId, url, title: safeTitle, isRead: false, timestamp: Date.now() };
+      set({ readingList: [...(state.readingList || []), newItem] });
+      if (uid) {
+        try {
+          await setDoc(doc(db, "users", uid, "profiles", fbProfile, "readingList", newId), newItem);
+        } catch (e) { console.error(e); }
+      }
+    }
+  },
+  
+  removeFromReadingList: async (id) => {
+    set((state) => ({ readingList: (state.readingList || []).filter(b => b.id !== id) }));
+    const state = get();
+    const uid = state.firebaseUid;
+    const fbProfile = getFbProfile(state);
+    if (uid) {
+      try {
+        await deleteDoc(doc(db, "users", uid, "profiles", fbProfile, "readingList", id));
+      } catch (e) { console.error(e); }
+    }
+  },
+  
+  toggleReadingListStatus: async (id) => {
+    const state = get();
+    let updatedItem = null;
+    set((state) => {
+      const newList = (state.readingList || []).map(item => {
+        if (item.id === id) {
+          updatedItem = { ...item, isRead: !item.isRead };
+          return updatedItem;
+        }
+        return item;
+      });
+      return { readingList: newList };
+    });
+    
+    if (updatedItem) {
+      const uid = get().firebaseUid;
+      const fbProfile = getFbProfile(get());
+      if (uid) {
+        try {
+          await updateDoc(doc(db, "users", uid, "profiles", fbProfile, "readingList", id), { isRead: updatedItem.isRead });
+        } catch (e) { console.error(e); }
+      }
     }
   },
 

@@ -64,7 +64,7 @@ export default function HeroSection() {
         <div className="absolute inset-0 border border-blue-500/30 rounded-full scale-[1.3] -rotate-12" />
       </div>
 
-      <h1 className="text-[clamp(1.75rem,4vw,2.25rem)] font-bold text-foreground mb-3 tracking-tight">
+      <h1 className="text-[clamp(1.75rem,4vw,2.25rem)] font-bold text-foreground mb-3 tracking-tight" suppressHydrationWarning>
         {greetingText()} <span className="inline-block animate-wave"></span>
       </h1>
       <p className="text-foreground/70 mb-8 text-[clamp(1rem,2vw,1.125rem)]">
