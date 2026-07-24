@@ -218,7 +218,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
 }
 
 export default function TopBar() {
-  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset } = useBrowserStore(
+  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset, isIncognitoWindow } = useBrowserStore(
     useShallow((state) => ({
       tabs: state.tabs,
       activeTabId: state.activeTabId,
@@ -237,6 +237,7 @@ export default function TopBar() {
       toggleMute: state.toggleMute,
       openSettingsTab: state.openSettingsTab,
       setDropdownOffset: state.setDropdownOffset,
+      isIncognitoWindow: state.isIncognitoWindow,
     }))
   );
   

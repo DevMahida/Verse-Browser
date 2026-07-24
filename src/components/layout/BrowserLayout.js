@@ -32,18 +32,40 @@ export default function BrowserLayout() {
     updateDownloadSettings,
     openDownloadsTab,
     openExtensionsTab,
-    theme
+    theme,
+    customColors
   } = useBrowserStore();
 
   useEffect(() => {
-    if (theme === 'light') {
+    // Reset custom inline styles
+    document.documentElement.style.removeProperty('--background');
+    document.documentElement.style.removeProperty('--surface');
+    document.documentElement.style.removeProperty('--surface-hover');
+    document.documentElement.style.removeProperty('--border');
+    document.documentElement.style.removeProperty('--accent');
+    document.documentElement.style.removeProperty('--foreground');
+
+    if (theme === 'custom' && customColors) {
+      document.body.classList.remove('light-theme');
+      document.documentElement.dataset.theme = 'custom';
+      
+      if (customColors.background) document.documentElement.style.setProperty('--background', customColors.background);
+      if (customColors.surface) {
+        document.documentElement.style.setProperty('--surface', customColors.surface);
+        // Simple hover calculation: just use the same or we could darken/lighten it
+        document.documentElement.style.setProperty('--surface-hover', customColors.surface);
+      }
+      if (customColors.border) document.documentElement.style.setProperty('--border', customColors.border);
+      if (customColors.primary) document.documentElement.style.setProperty('--accent', customColors.primary);
+      if (customColors.text) document.documentElement.style.setProperty('--foreground', customColors.text);
+    } else if (theme === 'light') {
       document.body.classList.add('light-theme');
       document.documentElement.dataset.theme = 'light';
     } else {
       document.body.classList.remove('light-theme');
       document.documentElement.dataset.theme = 'dark';
     }
-  }, [theme]);
+  }, [theme, customColors]);
 
   useEffect(() => {
     if (window.electron && window.electron.themeAPI) {

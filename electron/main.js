@@ -1,4 +1,8 @@
-const { app, BrowserWindow, ipcMain, session, Menu, screen, net, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, session, Menu, screen, net, nativeTheme, protocol } = require("electron");
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'theme', privileges: { bypassCSP: true, supportFetchAPI: true, secure: true, standard: true } }
+]);
 const path = require("path");
 
 // Load .env.local so Electron main process can read GOOGLE_CLIENT_ID, etc.
@@ -116,6 +120,7 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
       for (const other of allWindows) {
         if (other === win || other.isDestroyed()) continue;
         if (other._isIncognito !== win._isIncognito) continue;
+        if (other._profileId !== win._profileId) continue;
         const [ox, oy] = other.getPosition();
         const [ow] = other.getSize();
 
@@ -189,6 +194,13 @@ try {
 } catch {}
 
 app.whenReady().then(async () => {
+  const { pathToFileURL } = require('url');
+  protocol.handle('theme', (request) => {
+    let url = request.url.replace('theme://', '');
+    if (url.startsWith('/')) url = url.slice(1);
+    const filePath = path.join(app.getPath('userData'), url);
+    return net.fetch(pathToFileURL(filePath).href);
+  });
   // Dynamically strip Electron and AppName from the default User-Agent
   // We use the Chrome User-Agent globally. Because we set app.userAgentFallback,
   // Electron automatically scrubs "Electron" from navigator.userAgentData and sec-ch-ua!
@@ -425,7 +437,13 @@ app.whenReady().then(async () => {
       const newX = parseInt(Math.round(pos[0] + numDx), 10);
       const newY = parseInt(Math.round(pos[1] + numDy), 10);
       if (!isNaN(newX) && !isNaN(newY)) {
-        win.setPosition(newX, newY);
+        const bounds = win.getBounds();
+        win.setBounds({
+          x: newX,
+          y: newY,
+          width: bounds.width,
+          height: bounds.height
+        });
       }
     }
   });
@@ -451,6 +469,7 @@ app.whenReady().then(async () => {
     for (const other of allWindows) {
       if (other === sourceWin || other.isDestroyed()) continue;
       if (other._isIncognito !== sourceWin._isIncognito) continue;
+      if (other._profileId !== sourceWin._profileId) continue;
       const [ox, oy] = other.getPosition();
       const [ow] = other.getSize();
 
@@ -616,6 +635,61 @@ app.whenReady().then(async () => {
     } catch (e) {
       console.error("Failed to clear cookies:", e);
       return false;
+    }
+  });
+
+  ipcMain.handle('theme-save-image', async (event, { fileData, ext }) => {
+    try {
+      const themesDir = path.join(app.getPath('userData'), 'themes');
+      if (!fs.existsSync(themesDir)) {
+        fs.mkdirSync(themesDir, { recursive: true });
+      }
+      const filename = `ntp_background_${Date.now()}.${ext}`;
+      const filePath = path.join(themesDir, filename);
+      
+      let buffer;
+      if (typeof fileData === 'string') {
+        const base64Data = fileData.replace(/^data:image\/\w+;base64,/, "");
+        buffer = Buffer.from(base64Data, 'base64');
+      } else {
+        buffer = Buffer.from(fileData);
+      }
+      
+      fs.writeFileSync(filePath, buffer);
+      return { success: true, path: `theme://themes/${filename}` };
+    } catch (e) {
+      console.error('Failed to save theme image:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // --- Safety Check ---
+  ipcMain.handle('safety-check-version', async () => {
+    return {
+      current: app.getVersion(),
+      latest: '0.1.0', // Hardcoded for now — upgrade to GitHub Releases API later
+    };
+  });
+
+  ipcMain.handle('safety-check-breaches', async (event, email) => {
+    if (!email) return { success: false, error: 'No email provided' };
+    try {
+      // Use XposedOrNot free API — no key required
+      const response = await net.fetch(`https://api.xposedornot.com/v1/check-email/${encodeURIComponent(email)}`);
+      if (response.status === 404) {
+        // 404 means the email was NOT found in any breaches
+        return { success: true, breaches: [], count: 0 };
+      }
+      if (!response.ok) {
+        return { success: false, error: `API returned ${response.status}` };
+      }
+      const data = await response.json();
+      // XposedOrNot returns breaches in data.breaches array
+      const breaches = data.breaches || [];
+      return { success: true, breaches, count: breaches.length };
+    } catch (e) {
+      console.error('Safety check breach lookup failed:', e);
+      return { success: false, error: e.message };
     }
   });
 

@@ -3,6 +3,7 @@
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from "zustand/react/shallow";
 import { Check, MonitorSmartphone, ShieldAlert, X } from "lucide-react";
+import SafetyCheckSection from "./SafetyCheckSection";
 
 export default function SettingsPage() {
   const { 
@@ -45,6 +46,9 @@ export default function SettingsPage() {
           </div>
           <h1 className="text-[clamp(1.5rem,4vw,1.875rem)] font-semibold">Settings</h1>
         </div>
+        
+        {/* Safety Check Section */}
+        <SafetyCheckSection />
         
         {/* Appearance Section */}
         <div className="mb-12">

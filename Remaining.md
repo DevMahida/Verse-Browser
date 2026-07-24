@@ -72,17 +72,5 @@ While Verse Browser is feature-rich, it still lacks several key functionalities 
 ### 🟢 Low Difficulty
 *These features are mostly UI additions, simple state manipulations, or straightforward integrations.*
 
-#### 1. Advanced Tab Management (Utilities)
-- ✅ **Tab Search:** A quick way to search through open tabs (like Chrome's dropdown arrow or Ctrl+Shift+A).
-- ✅ **Send Tab to Device:** Send a currently open tab to another device logged into the same account. *(Trivial with Firebase real-time listeners).*
-
-#### 2. Built-in Utilities & Tools (Web-based)
-- ✅ **Reading List & Reading Mode:** A place to save articles for later and a distraction-free reading view. *(Highly achievable leveraging the already installed `@mozilla/readability` library).*
-- ✅ **Developer Tools UI:** Easy user-facing access to DevTools, perhaps with custom Verse-specific integrations. *(Electron handles DevTools natively, just requires simple UI triggers).*
-
-#### 3. UI/UX Enhancements (Visuals)
-- ✅ **Side Panel:** A persistent side panel for quick access to Bookmarks, Reading List, and History (similar to Chrome's side panel).
-- ✅ **Theme Engine:** Beyond light/dark mode, allow users to install custom themes or background images for the New Tab Page.
-
 #### 4. Security & Safety (Passive)
 - ✅ **Safety Check Tool:** A one-click check for updates, compromised passwords, and safe browsing status. *(Highly achievable combining React UI and simple API endpoints).*

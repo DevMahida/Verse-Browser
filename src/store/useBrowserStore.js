@@ -295,6 +295,23 @@ export const useBrowserStore = create(
         }
       }
     } catch (e) { console.error("Failed to fetch AI sessions", e); }
+
+    // Fetch Theme Settings
+    try {
+      const { getDoc } = await import('firebase/firestore');
+      const themeDoc = await getDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "settings", "theme"));
+      if (themeDoc.exists()) {
+        const data = themeDoc.data();
+        const updates = {};
+        if (data.theme) updates.theme = data.theme;
+        if (data.customColors) updates.customColors = { ...get().customColors, ...data.customColors };
+        if (data.ntpSettings) {
+          // Merge but preserve local backgroundImage (which is stored in localStorage, not Firebase)
+          updates.ntpSettings = { ...get().ntpSettings, backgroundBlur: data.ntpSettings.backgroundBlur, backgroundOverlay: data.ntpSettings.backgroundOverlay };
+        }
+        if (Object.keys(updates).length > 0) set(updates);
+      }
+    } catch (e) { console.error("Failed to fetch theme settings", e); }
   },
 
   // Split View State
@@ -310,7 +327,64 @@ export const useBrowserStore = create(
   setIsDraggingTab: (isDragging) => set({ isDraggingTab: isDragging }),
 
   // Theme State
-  theme: 'dark',
+  theme: 'dark', // 'light', 'dark', 'system', 'custom'
+  customColors: {
+    background: '#0f1015',
+    surface: '#1a1b23',
+    border: '#2d3748',
+    primary: '#6b46c1',
+    text: '#e2e8f0',
+  },
+  ntpSettings: {
+    backgroundImage: null,
+    backgroundBlur: '0px',
+    backgroundOverlay: 'rgba(0,0,0,0.4)',
+  },
+  setTheme: (newTheme) => {
+    if (window.electron && window.electron.themeAPI && (newTheme === 'light' || newTheme === 'dark' || newTheme === 'system')) {
+      window.electron.themeAPI.set(newTheme);
+    }
+    set({ theme: newTheme });
+    // Sync to Firebase
+    const state = get();
+    if (state.firebaseUid) {
+      const fbProfile = getFbProfile(state);
+      setDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "settings", "theme"), {
+        theme: newTheme,
+        customColors: state.customColors,
+        ntpSettings: { ...state.ntpSettings, backgroundImage: null }, // Don't sync large image to Firestore doc
+        timestamp: serverTimestamp()
+      }, { merge: true }).catch(e => console.error("Failed to sync theme", e));
+    }
+  },
+  setCustomColors: (colors) => {
+    set((state) => ({ customColors: { ...state.customColors, ...colors } }));
+    // Sync to Firebase
+    const state = get();
+    if (state.firebaseUid) {
+      const fbProfile = getFbProfile(state);
+      setDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "settings", "theme"), {
+        customColors: state.customColors,
+        timestamp: serverTimestamp()
+      }, { merge: true }).catch(e => console.error("Failed to sync custom colors", e));
+    }
+  },
+  setNtpSettings: (settings) => {
+    set((state) => ({ ntpSettings: { ...state.ntpSettings, ...settings } }));
+    // Sync non-image settings to Firebase (image is too large for Firestore doc)
+    const state = get();
+    if (state.firebaseUid) {
+      const fbProfile = getFbProfile(state);
+      setDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "settings", "theme"), {
+        ntpSettings: {
+          backgroundBlur: state.ntpSettings.backgroundBlur,
+          backgroundOverlay: state.ntpSettings.backgroundOverlay,
+          hasBackgroundImage: !!state.ntpSettings.backgroundImage,
+        },
+        timestamp: serverTimestamp()
+      }, { merge: true }).catch(e => console.error("Failed to sync ntp settings", e));
+    }
+  },
   toggleTheme: () => {
     const currentTheme = useBrowserStore.getState().theme;
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -1095,6 +1169,9 @@ export const useBrowserStore = create(
         aiChatSessions: state.aiChatSessions,
         selectedAiModel: state.selectedAiModel,
         researchMode: state.researchMode,
+        theme: state.theme,
+        customColors: state.customColors,
+        ntpSettings: state.ntpSettings,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }

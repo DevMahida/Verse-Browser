@@ -48,11 +48,16 @@ contextBridge.exposeInMainWorld("electron", {
   deleteProfile: (id) => ipcRenderer.invoke('delete-profile', id),
   updateProfileData: (id, data) => ipcRenderer.invoke('update-profile-data', { id, data }),
   
-  // Theme Management
   themeAPI: {
     get: () => ipcRenderer.invoke('theme-get'),
     set: (theme) => ipcRenderer.send('theme-set', theme),
-    onChange: (callback) => ipcRenderer.on('theme-updated', (_event, data) => callback(data))
+    onChange: (callback) => ipcRenderer.on('theme-updated', (_event, data) => callback(data)),
+    saveImage: (fileData, ext) => ipcRenderer.invoke('theme-save-image', { fileData, ext })
+  },
+
+  safetyCheck: {
+    checkVersion: () => ipcRenderer.invoke('safety-check-version'),
+    checkBreaches: (email) => ipcRenderer.invoke('safety-check-breaches', email),
   },
   
   // TabManager (WebContentsView/BrowserView)
