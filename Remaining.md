@@ -64,13 +64,6 @@ While Verse Browser is feature-rich, it still lacks several key functionalities 
 #### 5. UI/UX Enhancements (Native Integrations)
 - ❌ **Cast Support:** Native integration to cast media or tabs to Chromecast-enabled devices. *(Electron currently lacks out-of-the-box support for the Cast API).*
 
-#### 6. Accessibility (UI)
-- ✅ **Screen Reader Enhancements:** Ensure full compatibility and optimization for various screen readers across all React components. *(Highly achievable via standard ARIA attributes).*
 
----
 
-### 🟢 Low Difficulty
-*These features are mostly UI additions, simple state manipulations, or straightforward integrations.*
 
-#### 4. Security & Safety (Passive)
-- ✅ **Safety Check Tool:** A one-click check for updates, compromised passwords, and safe browsing status. *(Highly achievable combining React UI and simple API endpoints).*

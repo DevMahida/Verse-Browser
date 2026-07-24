@@ -302,7 +302,7 @@ export default function NavigationBar() {
       </div>
 
       {/* URL / Search Bar */}
-      <div className="flex-1 relative mx-2">
+      <div className="flex-1 relative mx-2" role="search">
         <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
           <div className="relative flex items-center">
             {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
@@ -312,6 +312,9 @@ export default function NavigationBar() {
                 onClick={() => setShowSiteSettings(!showSiteSettings)}
                 className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
                 title="Site settings"
+                aria-label="Site settings"
+                aria-haspopup="dialog"
+                aria-expanded={showSiteSettings}
               >
                 <Shield size={14} />
               </button>
@@ -332,6 +335,7 @@ export default function NavigationBar() {
                 }}
                 className="mr-2 text-foreground/50 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-500/10"
                 title="Enter Reader Mode"
+                aria-label="Enter Reader Mode"
               >
                 <BookOpen size={14} />
               </button>
@@ -348,6 +352,7 @@ export default function NavigationBar() {
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            aria-label="Address and search bar"
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
@@ -360,6 +365,9 @@ export default function NavigationBar() {
                 onClick={() => setShowZoomPopup(!showZoomPopup)}
                 className="p-1 rounded-md transition-colors text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
                 title="Zoom: this page is zoomed"
+                aria-label="Zoom controls"
+                aria-haspopup="dialog"
+                aria-expanded={showZoomPopup}
               >
                 <ZoomIn size={16} />
               </button>
@@ -381,6 +389,7 @@ export default function NavigationBar() {
                 : "text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
             )}
             title={isBookmarked ? "Remove bookmark" : "Bookmark this tab"}
+            aria-label={isBookmarked ? "Remove bookmark" : "Bookmark this tab"}
           >
             <Star size={16} className={isBookmarked ? "fill-current" : ""} />
           </button>
@@ -400,6 +409,7 @@ export default function NavigationBar() {
                 : "text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
             )}
             title={isReadingListSaved ? "Remove from Reading List" : "Add to Reading List"}
+            aria-label={isReadingListSaved ? "Remove from Reading List" : "Add to Reading List"}
           >
             <Bookmark size={16} className={isReadingListSaved ? "fill-current" : ""} />
           </button>
@@ -424,6 +434,8 @@ export default function NavigationBar() {
             <button 
               onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
               aria-label="Downloads"
+              aria-haspopup="dialog"
+              aria-expanded={showDownloadsPopup}
               className={clsx(
                 "relative p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
                 downloadAnimate && "animate-in zoom-in-90 duration-200"
@@ -464,6 +476,9 @@ export default function NavigationBar() {
             <button 
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70"
+              aria-label="Incognito mode"
+              aria-haspopup="menu"
+              aria-expanded={showProfileMenu}
             >
               <EyeOff size={16} />
               <span className="text-xs font-medium">Incognito</span>
@@ -472,6 +487,9 @@ export default function NavigationBar() {
             <button 
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none"
+              aria-label="Profile menu"
+              aria-haspopup="menu"
+              aria-expanded={showProfileMenu}
             >
               {userProfilePic ? (
                 // eslint-disable-next-line @next/next/no-img-element

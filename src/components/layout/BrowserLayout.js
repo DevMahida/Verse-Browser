@@ -499,7 +499,7 @@ export default function BrowserLayout() {
   return (
     <div className="flex flex-col h-screen w-screen bg-background overflow-hidden font-sans">
       {/* Top Toolbar Area */}
-      <div className="flex flex-col w-full z-50 relative shadow-sm">
+      <div className="flex flex-col w-full z-50 relative shadow-sm" role="navigation" aria-label="Main toolbar">
         <TopBar />
         <NavigationBar />
         {(bookmarkBarVisibility === 'always' || (bookmarkBarVisibility === 'new-tab' && tabs.find(t => t.id === activeTabId)?.url === 'browser://newtab')) && (
@@ -509,7 +509,7 @@ export default function BrowserLayout() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative" role="main">
         {/* Browser Content (Webviews) */}
         <div className="flex-1 bg-surface relative overflow-auto">
           <WebviewContainer />

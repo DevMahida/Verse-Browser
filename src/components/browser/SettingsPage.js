@@ -151,6 +151,7 @@ export default function SettingsPage() {
                             onClick={() => revokePermission(origin, perm)}
                             className="ml-1 text-foreground/40 hover:text-red-400 transition-colors"
                             title={`Revoke ${perm}`}
+                            aria-label={`Revoke ${perm} permission for ${origin}`}
                           >
                             <X size={12} />
                           </button>

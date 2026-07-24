@@ -141,6 +141,9 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
       {...customListeners}
       onClick={() => setActiveTab(tab.id)}
       onContextMenu={(e) => onContextMenu(e, tab.id)}
+      role="tab"
+      aria-selected={isActive}
+      tabIndex={isActive ? 0 : -1}
       onAuxClick={(e) => {
         if (e.button === 1) { // middle click
           e.preventDefault();
@@ -449,6 +452,7 @@ export default function TopBar() {
         className="flex-1 flex items-end space-x-1 overflow-x-auto no-scrollbar"
         ref={tabsContainerRef}
         onMouseLeave={() => setFrozenTabWidth(null)}
+        role="tablist"
       >
         <DndContext 
           id="browser-tabs-dnd"
@@ -505,18 +509,21 @@ export default function TopBar() {
         <div className="flex items-center h-full space-x-0 ml-2">
           <button 
             onClick={() => window.electron?.minimize?.()}
+            aria-label="Minimize"
           className="h-8 w-10 flex items-center justify-center hover:bg-foreground/10 transition-colors"
         >
           <div className="w-2.5 h-px bg-current" />
         </button>
         <button 
           onClick={() => window.electron?.maximize?.()}
+          aria-label="Maximize"
           className="h-8 w-10 flex items-center justify-center hover:bg-foreground/10 transition-colors"
         >
           <div className="w-2.5 h-2.5 border border-current" />
         </button>
         <button 
           onClick={() => window.electron?.close?.()}
+          aria-label="Close window"
           className="h-8 w-10 flex items-center justify-center hover:bg-red-500 hover:text-foreground transition-colors"
         >
           <X size={16} />
@@ -526,13 +533,13 @@ export default function TopBar() {
 
       {/* In-App Logout Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/60 z-200 flex items-center justify-center font-sans no-drag-region">
+        <div className="fixed inset-0 bg-black/60 z-200 flex items-center justify-center font-sans no-drag-region" role="dialog" aria-modal="true" aria-labelledby="logout-title">
           <div className="bg-surface border border-border w-96 rounded-2xl shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-200">
-            <button onClick={() => setShowLogoutModal(false)} className="absolute top-4 right-4 text-foreground/70 hover:text-foreground transition-colors">
+            <button onClick={() => setShowLogoutModal(false)} className="absolute top-4 right-4 text-foreground/70 hover:text-foreground transition-colors" aria-label="Close">
               <X size={20} />
             </button>
             
-            <h2 className="text-xl font-semibold text-foreground mb-2">Sign out</h2>
+            <h2 id="logout-title" className="text-xl font-semibold text-foreground mb-2">Sign out</h2>
             <p className="text-sm text-foreground/70 mb-6">Signing out will remove all Google accounts from this browser. You will need to sign in again to access synced data.</p>
             
             <div className="space-y-2 mb-6 max-h-75 overflow-y-auto custom-scrollbar">

@@ -31,18 +31,19 @@ export default function CustomizeThemeModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="customize-theme-title">
       <div className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-surface">
-          <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+          <h2 id="customize-theme-title" className="text-xl font-semibold text-foreground flex items-center gap-2">
             <Palette className="w-5 h-5 text-accent" />
             Customize Verse
           </h2>
           <button 
             onClick={onClose}
             className="p-2 rounded-full hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
