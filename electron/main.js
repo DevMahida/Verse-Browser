@@ -93,6 +93,14 @@ function createWindow(initialTab = null, x = undefined, y = undefined, isIncogni
     if (mainWindow === win) mainWindow = null;
   });
 
+  win.on('app-command', (e, cmd) => {
+    if (cmd === 'browser-backward') {
+      if (!win.isDestroyed()) win.webContents.send('keyboard-shortcut', 'go-back');
+    } else if (cmd === 'browser-forward') {
+      if (!win.isDestroyed()) win.webContents.send('keyboard-shortcut', 'go-forward');
+    }
+  });
+
   // --- Tab Merge via Window Proximity ---
   // When a window stops moving near another window's tab bar, merge its tabs into the target.
   let moveTimer = null;

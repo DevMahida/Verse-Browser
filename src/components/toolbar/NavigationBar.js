@@ -171,6 +171,22 @@ export default function NavigationBar() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    const handleFocusAddressBar = (e) => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        if (e.detail?.search) {
+          setInputValue('? ');
+          // Don't select, let the user type after "? "
+        } else {
+          inputRef.current.select();
+        }
+      }
+    };
+    window.addEventListener('focus-address-bar', handleFocusAddressBar);
+    return () => window.removeEventListener('focus-address-bar', handleFocusAddressBar);
+  }, []);
+
   const isBookmarked = activeTab && bookmarks.some(b => b.url === activeTab.url);
   const { readingList, addToReadingList, removeFromReadingList } = useBrowserStore();
   const isReadingListSaved = activeTab && (readingList || []).some(r => r.url === activeTab.url);
@@ -181,6 +197,12 @@ export default function NavigationBar() {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && inputValue.trim() !== '') {
       let targetUrl = inputValue.trim();
+
+      // Ctrl+Enter autocomplete (add www. and .com)
+      if ((e.ctrlKey || e.metaKey) && !targetUrl.includes('.') && !targetUrl.includes(' ') && !targetUrl.startsWith('verse://')) {
+        targetUrl = `www.${targetUrl}.com`;
+      }
+
       // Convert verse:// back to browser:// for internal routing
       if (targetUrl.startsWith('verse://')) {
         targetUrl = targetUrl.replace('verse://', 'browser://');

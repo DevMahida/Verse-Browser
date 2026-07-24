@@ -107,11 +107,18 @@ function initTabManager() {
     });
 
     // Handle new window opens (target="_blank" or window.open)
-    view.webContents.setWindowOpenHandler(({ url }) => {
+    view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       // Allow Google Auth popups to open natively so they inherit the correct session and UA
       if (isGoogleAuthUrl(url)) {
         return { action: 'allow' };
       }
+      
+      // Alt+Click natively triggers save-to-disk
+      if (disposition === 'save-to-disk') {
+        view.webContents.downloadURL(url);
+        return { action: 'deny' };
+      }
+
       // Otherwise open a new tab in the browser
       if (!sender.isDestroyed()) {
         sender.send('webview-new-window', { url });
@@ -287,9 +294,11 @@ function initTabManager() {
         view.webContents.stop();
         break;
       case 'goBack':
+      case 'go-back':
         if (view.webContents.canGoBack()) view.webContents.goBack();
         break;
       case 'goForward':
+      case 'go-forward':
         if (view.webContents.canGoForward()) view.webContents.goForward();
         break;
       case 'copy':
@@ -309,6 +318,27 @@ function initTabManager() {
           view.webContents.closeDevTools();
         } else {
           view.webContents.openDevTools({ mode: 'right' });
+        }
+        break;
+      case 'inspect-element':
+        view.webContents.inspectElement(0, 0);
+        break;
+      case 'open-file':
+        {
+          const { dialog } = require('electron');
+          const mainWindow = BrowserWindow.fromWebContents(event.sender);
+          dialog.showOpenDialog(mainWindow, {
+            properties: ['openFile'],
+            filters: [
+              { name: 'Documents', extensions: ['pdf', 'html', 'txt', 'md'] },
+              { name: 'Images', extensions: ['jpg', 'png', 'svg', 'webp'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          }).then(result => {
+            if (!result.canceled && result.filePaths.length > 0) {
+              view.webContents.loadFile(result.filePaths[0]);
+            }
+          });
         }
         break;
       case 'set-muted':

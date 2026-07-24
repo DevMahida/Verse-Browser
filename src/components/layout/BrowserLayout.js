@@ -8,6 +8,7 @@ import BookmarkBar from "../toolbar/BookmarkBar";
 import FindBar from "../toolbar/FindBar";
 import AISidebar from "../ai/AISidebar";
 import WebviewContainer from "../browser/WebviewContainer";
+import ClearDataModal from "../modals/ClearDataModal";
 
 
 
@@ -151,12 +152,16 @@ export default function BrowserLayout() {
     // Handle global keyboard shortcuts
     const cleanupShortcut = window.electron.onKeyboardShortcut?.((action) => {
       const state = useBrowserStore.getState();
+      const activePaneTabId = state.focusedPane === 'secondary' && state.splitTabId ? state.splitTabId : state.activeTabId;
+
       if (action === 'new-tab') {
         state.addTab();
       } else if (action === 'close-tab') {
         state.removeTab(state.activeTabId);
       } else if (action === 'find') {
         state.updateFindState(state.activeTabId, { isVisible: true });
+      } else if (action === 'go-back' || action === 'go-forward') {
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action });
       }
     });
 
@@ -180,6 +185,75 @@ export default function BrowserLayout() {
         e.preventDefault();
         window.electron?.toggleFullscreen?.();
         return;
+      }
+      
+      // F5 / Shift+F5 (Reload / Hard Reload)
+      if (key === 'f5') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: e.shiftKey ? 'hard-reload' : 'reload' });
+        return;
+      }
+
+      // F6 (Focus Omnibox)
+      if (key === 'f6') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('focus-address-bar'));
+        return;
+      }
+
+      // Esc (Stop)
+      if (key === 'escape') {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'stop' });
+        return;
+      }
+
+      // Alt+Left / Backspace (Back)
+      if ((e.altKey && key === 'arrowleft') || (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && key === 'backspace' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA')) {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'go-back' });
+        return;
+      }
+
+      // Alt+Right / Shift+Backspace (Forward)
+      if ((e.altKey && key === 'arrowright') || (e.shiftKey && key === 'backspace' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA')) {
+        e.preventDefault();
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'go-forward' });
+        return;
+      }
+
+      // Alt+D (Focus Omnibox)
+      if (e.altKey && key === 'd') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('focus-address-bar'));
+        return;
+      }
+
+      // Verse-specific non-ctrl shortcuts (Alt+Shift+S, Alt+Shift+R, Alt+Shift+T, Alt+Shift+D)
+      if (e.altKey && e.shiftKey) {
+        if (key === 's') { // Split view
+          e.preventDefault();
+          const state = useBrowserStore.getState();
+          if (state.splitTabId) state.clearSplit();
+          else if (state.tabs.length > 1) state.setSplitTab(state.tabs.find(t => t.id !== state.activeTabId)?.id);
+          return;
+        }
+        if (key === 'r') { // Reading mode
+          e.preventDefault();
+          window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'toggle-reader-mode' });
+          return;
+        }
+        if (key === 't') { // Theme (not implemented yet, but reserved)
+          e.preventDefault();
+          return;
+        }
+        if (key === 'd') { // Deep Research (using Alt+Shift+D to avoid Ctrl+Shift+R clash)
+          e.preventDefault();
+          const state = useBrowserStore.getState();
+          state.setResearchMode(!state.researchMode);
+          if (!state.isAISidebarOpen) state.setAISidebarOpen(true);
+          return;
+        }
       }
 
       // Must have Ctrl or Cmd key for the rest
@@ -215,6 +289,13 @@ export default function BrowserLayout() {
         return;
       }
 
+      if (key === 'g') {
+        e.preventDefault();
+        // F3 is typically find next, but we capture Ctrl+G
+        window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: e.shiftKey ? 'find-previous' : 'find-next' });
+        return;
+      }
+
       if (key === 'p') {
         e.preventDefault();
         window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'print' });
@@ -230,7 +311,7 @@ export default function BrowserLayout() {
       if (key === 'r') {
         e.preventDefault();
         if (window.electron?.tabManager) {
-          window.electron.tabManager.action({ tabId: activeTabId, action: 'reload' });
+          window.electron.tabManager.action({ tabId: activePaneTabId, action: e.shiftKey ? 'hard-reload' : 'reload' });
         }
         return;
       }
@@ -244,9 +325,38 @@ export default function BrowserLayout() {
         return;
       }
 
-      if (key === 'o' && e.shiftKey) {
+      if (key === 'o') {
         e.preventDefault();
-        openBookmarksTab();
+        if (e.shiftKey) {
+          openBookmarksTab();
+        } else {
+          window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action: 'open-file' });
+        }
+        return;
+      }
+
+      if (key === 'l') {
+        e.preventDefault();
+        if (e.shiftKey) { // Ctrl+Shift+L: Toggle AI Sidebar
+          const state = useBrowserStore.getState();
+          state.setAISidebarOpen(!state.isAISidebarOpen);
+        } else { // Ctrl+L: Focus Omnibox
+          window.dispatchEvent(new CustomEvent('focus-address-bar'));
+        }
+        return;
+      }
+
+      if (key === 'k' || key === 'e') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('focus-address-bar', { detail: { search: true } }));
+        return;
+      }
+
+      if (key === 'delete' || key === 'backspace') {
+        if (e.shiftKey) { // Ctrl+Shift+Delete
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('open-clear-data'));
+        }
         return;
       }
 
@@ -390,6 +500,9 @@ export default function BrowserLayout() {
           </div>
         )}
       </div>
+
+      {/* Clear Data Modal */}
+      <ClearDataModal />
     </div>
   );
 }
