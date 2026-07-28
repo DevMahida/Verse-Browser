@@ -1,0 +1,84 @@
+=================================================
+          VERSE BROWSER - PROJECT REPORT
+=================================================
+
+1. PROJECT OVERVIEW
+-------------------------------------------------
+Project Name: Verse Browser
+Description: A next-generation, AI-powered desktop web browser built on modern web technologies. It combines traditional web browsing capabilities with an embedded AI Sidebar, "Deep Research" capabilities, robust split-pane viewing, and cross-device Firebase syncing. 
+
+2. TECHNOLOGY STACK
+-------------------------------------------------
+- Desktop Runtime: Electron
+- Frontend Framework: Next.js 16 (React 19, Static Export via Turbopack)
+- Styling: Tailwind CSS v4
+- State Management: Zustand (with persistence)
+- Database & Auth: Firebase (Firestore & Google Auth)
+- Drag and Drop: dnd-kit
+- AI Integrations: OpenRouter API (Multi-model support) & Tavily (Deep research)
+
+3. ARCHITECTURE
+-------------------------------------------------
+The application follows a hybrid architecture, splitting responsibilities between a Node.js main process and a React frontend:
+
+- Main Process (/electron/): Handles IPC (Inter-Process Communication), window creation, native OS-level interactions, profile management, and driving the Chromium WebContentsViews.
+- Frontend Renderer (/src/): The Next.js application that renders the user interface (omnibox, sidebar, settings, etc.) using React.
+
+4. FILE & FOLDER STRUCTURE
+-------------------------------------------------
+/electron/ (Desktop Runtime / Backend)
+  ├── main.js                  # Primary entry point. Handles app lifecycle, main windows, IPC setup
+  ├── tabManager.js            # Manages Chromium WebContentsView for tabs and split-pane logic
+  ├── preload.js               # Secure IPC bridge connecting Node.js with React (window.electron)
+  ├── auth-preload.js          # Specialized preload for Google Auth window
+  ├── tab-preload.js           # Specialized preload injected into web pages
+  ├── googleAuth.js            # Native Google Sign-in flow handling
+  ├── system-auth-handoff.js   # Passes auth tokens from desktop OS to React frontend
+  ├── profileManager.js        # Manages isolated browsing profiles (Incognito, Multi-account)
+  ├── contextMenu.js           # Generates native OS right-click context menus
+  ├── windowBounds.js          # Persists window size/position across restarts
+  └── view-source.html         # Template for rendering view-source:// pages
+
+/src/ (Frontend UI / React & Next.js)
+  ├── app/                     # Next.js Routing
+  │   ├── layout.js            # Root layout with global providers/fonts
+  │   ├── page.js              # Main browser window entry component
+  │   └── globals.css          # Tailwind CSS and global styling
+  ├── components/              # Modular UI Components
+  │   ├── ai/                  # AI Sidebar interface (AISidebar.js)
+  │   ├── browser/             # Internal pages (Settings, History, Downloads, Extensions)
+  │   │                        # WebviewContainer.js maps React UI to Electron views
+  │   ├── common/              # Reusable UI like SuggestionsDropdown.js
+  │   ├── homepage/            # New Tab page (Hero, TopSites, RecentTabs)
+  │   ├── layout/              # Main BrowserLayout.js skeleton
+  │   ├── modals/              # Global popups (ClearData, CustomizeTheme)
+  │   ├── toolbar/             # Omnibox (NavigationBar.js), Tab strip (TopBar.js), Menus
+  │   └── ui/                  # Shared micro-components (ResizeHandle.js)
+  ├── store/                   # State Management
+  │   └── useBrowserStore.js   # Massive Zustand store handling tabs, history, and syncing
+  ├── hooks/                   # Custom React hooks (useResizableWidth, useSearchSuggestions)
+  └── lib/                     # Utilities
+      └── firebase.js          # Firebase SDK initialization
+
+5. KEY FEATURES (IMPLEMENTED)
+-------------------------------------------------
+- Core: Fast Chromium rendering, Omnibox navigation, Find in Page, Page Zooming.
+- Advanced Tabs: Drag-and-drop, tab pinning, and Split View (native side-by-side tabs in one window).
+- Window Proximity: Dragging a tab creates a new window, dragging windows near each other merges them.
+- Privacy & Security: True Incognito mode, site permissions manager, and XposedOrNot safety checks.
+- Cloud Sync: Multi-device sync of bookmarks, history, and AI chats via Firebase.
+- AI Assistant: Built-in context-aware AI Sidebar with deep research capabilities.
+
+6. ROADMAP & PENDING FEATURES
+-------------------------------------------------
+- High Difficulty: Full WebExtensions API support (installing actual .crx extensions), Native live translation, Active Safe Browsing API integration, Live Captions.
+- Medium Difficulty: Password manager & Form autofill, Memory/Energy saver modes (sleeping tabs), Tab Groups.
+- UI Enhancements: Native Cast support.
+
+7. RECENT RESOLUTIONS
+-------------------------------------------------
+- Fixed custom background image persistence via Base64.
+- Fixed cross-profile tab merging issues.
+- Fixed window drag resizing bug on fractional scaling displays.
+- Added comprehensive ARIA screen-reader support.
+=================================================

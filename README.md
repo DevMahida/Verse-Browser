@@ -18,7 +18,7 @@
 
 **Verse Browser** is a fully functional desktop web browser built from the ground up using Electron and Next.js. It aims to bridge the gap between traditional web browsing and modern AI-assistance workflows. 
 
-Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Deep Research" capabilities, robust split-pane viewing, seamless cross-device Firebase syncing, and a sleek glassmorphic UI.
+Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Deep Research" capabilities, robust split-pane viewing, seamless cross-device Firebase syncing, and a sleek glassmorphic UI. It is built to be accessible, secure, and incredibly fast.
 
 ---
 
@@ -28,18 +28,21 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 - **Chromium Engine:** Fast and secure web rendering powered by Electron.
 - **Omnibox Navigation:** Unified search and address bar with intelligent suggestions and tab switching.
 - **Privacy Controls:** True Incognito Mode, safe browsing, and site permissions management.
+- **Security:** Built-in Safety Check for email breach monitoring powered by XposedOrNot.
+- **Accessibility:** Full ARIA screen-reader support (NVDA, Narrator, VoiceOver) across the entire custom user interface.
 - **Media & Utilities:** Native PDF viewing, downloads manager, find-in-page, and page zooming.
 
 ### Advanced Tab Management
 - **Split View:** Natively split the viewport to view two tabs side-by-side without opening multiple windows.
-- **Drag-and-Drop:** Seamlessly rearrange tabs or tear them off into new windows.
+- **Drag-and-Drop:** Seamlessly rearrange tabs or tear them off into new windows using `dnd-kit`.
+- **Multi-Profile Isolation:** Tabs dynamically detect profile identities, preventing cross-profile merging when dragging and dropping windows.
 - **Tab Utilities:** Pin tabs, mute/unmute audio, duplicate, send to device, and search through open tabs effortlessly.
 
 ### Built-in Artificial Intelligence
 - **AI Sidebar:** A persistent, conversational AI assistant embedded directly into your browsing workflow.
-- **Multi-Model Support:** Connects via OpenRouter to seamlessly switch between Meta Llama, Google Gemini, Anthropic Claude, DeepSeek, and OpenAI models.
+- **Multi-Model Support:** Connects via OpenRouter to seamlessly switch between Meta Llama, Google Gemini, Anthropic Claude, DeepSeek, Mistral, Qwen, and OpenAI models.
 - **Context-Aware:** The AI can read the active tab's content to summarize, explain, or answer direct questions about the page you're viewing.
-- **Deep Research Mode:** Utilizing Tavily API, the browser can autonomously search the web, analyze multiple sources, and synthesize comprehensive reports.
+- **Deep Research Mode:** Utilizing the Tavily API, the browser can autonomously search the web, analyze multiple sources, and synthesize comprehensive reports.
 - **Report Exports:** Export generated research reports directly to PDF or DOCX formats.
 
 ### Cross-Device Syncing
@@ -47,14 +50,14 @@ Verse integrates natively with major LLMs, offering an embedded AI Sidebar, "Dee
 
 ### UI & Customization
 - **Theme Engine:** Modern Glassmorphism design with seamless light/dark mode support.
-- **Customization:** Personalize your New Tab page with custom background images and dynamic widgets.
+- **Customization:** Personalize your New Tab page with custom background images (saved securely via Base64 to bypass local file restrictions).
 - **Distraction-Free:** Built-in Reading Mode (powered by Mozilla Readability) for extracting and cleanly formatting articles.
 
 ---
 
 ## <a id="tech-stack"></a>🛠️ Tech Stack
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (React 19, Static Export)
+- **Framework:** [Next.js 16](https://nextjs.org/) (React 19, Static Export via Turbopack)
 - **Desktop Runtime:** [Electron](https://www.electronjs.org/)
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
 - **State Management:** [Zustand](https://zustand-demo.pmnd.rs/) (with persistence)
@@ -114,7 +117,7 @@ To get a local copy up and running, follow these simple steps.
 - `/src/app` - Next.js routing and primary UI entry point (exported as static HTML).
 - `/src/components` - React UI components (Toolbar, Sidebar, Homepage, Webview Containers).
 - `/src/store` - Zustand state stores (`useBrowserStore.js`).
-- `/electron` - Electron main process scripts (`main.js`, `tabManager.js`, `preload.js`). Handles native APIs, Chromium views, and secure IPC backend requests for AI functionality.
+- `/electron` - Electron main process scripts (`main.js`, `tabManager.js`, `preload.js`). Handles native APIs, Chromium views, bounds management, and secure IPC backend requests for AI functionality.
 - `/public` - Static assets and icons.
 
 ---
