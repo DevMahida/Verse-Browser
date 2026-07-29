@@ -4,7 +4,7 @@ import {
   X, Sparkles, Send, BookOpen, FileText, Languages, HelpCircle,
   List, FileEdit, Zap, Loader2, RotateCcw, PencilLine, Copy, Check,
   Square, History, Trash2, ChevronDown, ChevronRight, MessageSquarePlus, Clock, Download, FileDown,
-  Globe, Search, ExternalLink, ArrowRight, ToggleLeft, ToggleRight, FileCheck
+  Globe, Search, ExternalLink, ArrowRight, ToggleLeft, ToggleRight, FileCheck, Key, Settings
 } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -156,6 +156,7 @@ export default function AISidebar() {
     saveAiSession, deleteAiSession, setCurrentAiSessionId,
     clearAllAiSessions, setSelectedAiModel,
     researchMode, setResearchMode, profileId,
+    openRouterApiKey, setOpenRouterApiKey,
   } = useBrowserStore();
 
   const [messages, setMessages] = useState([]);
@@ -390,7 +391,11 @@ export default function AISidebar() {
     }
   };
 
-  const buildPayload = (extra) => ({ ...extra, model: selectedAiModel });
+  const buildPayload = (extra) => ({
+    ...extra,
+    model: selectedAiModel,
+    apiKey: openRouterApiKey || undefined,
+  });
 
   const handleAction = async (endpoint, actionLabel, extraParams = {}, useSelectedOnly = false) => {
     if (isLoading || isProcessingRef.current) return;
@@ -449,7 +454,7 @@ export default function AISidebar() {
   // ── Deep Research Handler ──────────────────────────────────────────────────────
   const handleResearch = async (queryOverride) => {
     const query = typeof queryOverride === "string" ? queryOverride.trim() : input.trim();
-    if (!query || isLoading || isProcessingRef.current || !hasTavilyKey) return;
+    if (!query || isLoading || isProcessingRef.current) return;
 
     isProcessingRef.current = true;
     setInput("");
@@ -918,72 +923,6 @@ export default function AISidebar() {
           <HistoryView />
         ) : messages.length === 0 ? (
           <>
-            {researchMode && (!hasTavilyKey || showTavilySettings) ? (
-              <div className="flex flex-col space-y-4">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground mb-2">
-                    <span className="bg-linear-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">Connect Tavily</span>
-                  </h2>
-                  <p className="text-sm text-foreground/70 leading-relaxed mb-4">
-                    Deep Search requires your own Tavily API key to perform multi-source research. Your key is encrypted and stored locally per-profile.
-                  </p>
-                  
-                  <div className="bg-surface border border-border rounded-xl p-4 space-y-3 mb-6">
-                    <h3 className="text-sm font-medium text-foreground">How to get a key:</h3>
-                    <ol className="list-decimal pl-4 text-xs text-foreground/70 space-y-2">
-                      <li>Go to <a href="https://app.tavily.com/" target="_blank" rel="noreferrer" className="text-violet-400 hover:underline">app.tavily.com</a> and sign up or log in.</li>
-                      <li>Open the API Keys section of the dashboard.</li>
-                      <li>Copy your key (it starts with <code>tvly-</code>).</li>
-                      <li>Paste it below and click Connect.</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {hasTavilyKey && showTavilySettings && (
-                      <div className="text-sm font-medium text-foreground">
-                        Current key: <span className="text-violet-400 font-mono bg-violet-400/10 px-2 py-1 rounded">{maskedTavilyKey}</span>
-                      </div>
-                    )}
-                    <input
-                      type="password"
-                      placeholder="tvly-..."
-                      value={tavilyKeyInput}
-                      onChange={(e) => setTavilyKeyInput(e.target.value)}
-                      disabled={isLoading}
-                      className="w-full bg-surface-hover border border-border focus:border-violet-500/50 rounded-lg px-3 py-2 text-sm text-foreground outline-none transition-colors"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSaveTavilyKey}
-                        disabled={isLoading || !tavilyKeyInput.trim()}
-                        className="flex-1 bg-violet-500 hover:bg-violet-600 text-white font-medium text-sm py-2 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                      >
-                        {isLoading ? "Connecting..." : hasTavilyKey ? "Replace Key" : "Connect"}
-                      </button>
-                      {hasTavilyKey && (
-                        <button
-                          onClick={handleRemoveTavilyKey}
-                          disabled={isLoading}
-                          className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium text-sm py-2 rounded-lg transition-colors cursor-pointer"
-                        >
-                          Remove Key
-                        </button>
-                      )}
-                      {hasTavilyKey && showTavilySettings && (
-                        <button
-                          onClick={() => { setShowTavilySettings(false); setTavilyKeyInput(""); }}
-                          disabled={isLoading}
-                          className="flex-1 bg-surface border border-border hover:bg-surface-hover text-foreground font-medium text-sm py-2 rounded-lg transition-colors cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
                 {/* Greeting */}
                 <div>
                   {researchMode ? (
@@ -1171,8 +1110,6 @@ export default function AISidebar() {
                 </div>
               </>
             )}
-            </>
-          )}
           </>
         ) : (
           <div className="flex flex-col space-y-4">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from "zustand/react/shallow";

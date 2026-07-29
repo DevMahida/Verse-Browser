@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "electron": "electron .",
-    "desktop": "concurrently -k \"npm run dev\" \"wait-on http-get://localhost:3000 && electron .\"",
+    "electron": "set \"ELECTRON_RUN_AS_NODE=\" && electron .",
+    "desktop": "concurrently -k \"npm run dev\" \"wait-on http-get://localhost:3000 && npm run electron\"",
     "dist": "npm run build && electron-builder"
   },
   "build": {

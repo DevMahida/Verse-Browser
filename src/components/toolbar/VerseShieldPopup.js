@@ -60,10 +60,10 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
     if (!hostname || isInternalPage) return;
     
     if (window.electron?.tabManager?.shield?.getStatus) {
-      window.electron.tabManager.shield.getStatus().then((res) => {
+      window.electron.tabManager.shield.getStatus({ hostname, tabId }).then((res) => {
         if (res) {
           setShieldEnabled(res.enabled);
-          setStats({ ads: res.blockedCount, fingerprints: 0, httpUpgrades: 0 }); // We only have a unified block count in the new engine
+          setStats({ ...res.counts, httpUpgrades: 0 });
         }
       }).catch(() => {});
     }
@@ -134,7 +134,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
   return (
     <div
       ref={popupRef}
-      className="absolute top-9 left-0 w-[320px] bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-50 overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150"
+      className="absolute top-9 -left-60 w-[320px] bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-50 overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150"
     >
       {/* ─── Header: Domain + Shield Toggle ─── */}
       <div className={clsx(

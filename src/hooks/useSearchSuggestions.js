@@ -1,34 +1,35 @@
 import { useState, useEffect } from 'react';
 
-export function useSearchSuggestions(query, delay = 300) {
+export function useSearchSuggestions(query, delay = 250) {
   const [suggestions, setSuggestions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!query || query.trim().length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSuggestions([]);
-      return;
-    }
+    const trimmed = query ? query.trim() : '';
 
-    // Don't search if it looks like a URL (very basic check)
-    if (query.includes('.') && !query.includes(' ')) {
-      setSuggestions([]);
-      return;
+    if (!trimmed || (trimmed.includes('.') && !trimmed.includes(' '))) {
+      const timer = setTimeout(() => {
+        setSuggestions([]);
+        setIsLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/suggestions?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json();
-          setSuggestions(data.suggestions || []);
+          if (Array.isArray(data) && Array.isArray(data[1])) {
+            setSuggestions(data[1].slice(0, 6));
+          } else {
+            setSuggestions([]);
+          }
         } else {
           setSuggestions([]);
         }
       } catch (err) {
-        console.error('Failed to fetch suggestions', err);
         setSuggestions([]);
       } finally {
         setIsLoading(false);

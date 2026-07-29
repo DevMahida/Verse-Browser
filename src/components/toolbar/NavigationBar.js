@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
@@ -18,17 +19,17 @@ import ProfileMenu from "./ProfileMenu";
 import ZoomPopup from "./ZoomPopup";
 
 export default function NavigationBar() {
-    const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton } = useBrowserStore(
-      useShallow((state) => ({
-        toggleAISidebar: state.toggleAISidebar,
-        isAISidebarOpen: state.isAISidebarOpen,
-        tabs: state.tabs,
-        activeTabId: state.activeTabId,
-        splitTabId: state.splitTabId,
-        openReaderMode: state.openReaderMode,
-        readingList: state.readingList,
-        addToReadingList: state.addToReadingList,
-        removeFromReadingList: state.removeFromReadingList,
+  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton } = useBrowserStore(
+    useShallow((state) => ({
+      toggleAISidebar: state.toggleAISidebar,
+      isAISidebarOpen: state.isAISidebarOpen,
+      tabs: state.tabs,
+      activeTabId: state.activeTabId,
+      splitTabId: state.splitTabId,
+      openReaderMode: state.openReaderMode,
+      readingList: state.readingList,
+      addToReadingList: state.addToReadingList,
+      removeFromReadingList: state.removeFromReadingList,
       focusedPane: state.focusedPane,
       clearSplitView: state.clearSplitView,
       navigate: state.navigate,
@@ -49,7 +50,7 @@ export default function NavigationBar() {
       showHomeButton: state.showHomeButton,
     }))
   );
-  
+
   const activePaneTabId = focusedPane === 'secondary' && splitTabId ? splitTabId : activeTabId;
   const activeTab = tabs.find(t => t.id === activePaneTabId);
   const zoomLevel = activeTab?.zoomLevel || 0;
@@ -86,7 +87,7 @@ export default function NavigationBar() {
   useEffect(() => {
     if (window.electron && window.electron.getProfiles) {
       window.electron.getProfiles().then(setProfiles).catch(console.error);
-      
+
       // Also poll for profile updates periodically in case we updated the name/email via Google Login
       const interval = setInterval(() => {
         window.electron.getProfiles().then(setProfiles).catch(console.error);
@@ -126,34 +127,34 @@ export default function NavigationBar() {
     else if (showProfileMenu) offset = 500;
     else if (showZoomPopup) offset = 200;
     else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
-    
+
     setDropdownOffset(offset);
   }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, isFocused, suggestions.length, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;
-    
+
     const completedCount = downloads.filter(d => d.state === 'completed').length;
     if (completedCount > prevCompletedCount.current) {
       // A new download finished
       setDownloadAnimate(true);
       setShowDownloadsPopup(true);
       setDownloadJustFinished(true);
-      
+
       const hideTimer = setTimeout(() => {
         setShowDownloadsPopup(false);
         setDownloadJustFinished(false);
       }, 3000);
-      
+
       const animTimer = setTimeout(() => setDownloadAnimate(false), 300);
-      
+
       prevCompletedCount.current = completedCount;
       return () => {
         clearTimeout(hideTimer);
         clearTimeout(animTimer);
       };
     }
-    
+
     prevCompletedCount.current = completedCount;
   }, [downloads]);
 
@@ -174,8 +175,11 @@ export default function NavigationBar() {
 
   // Reset shield badge count when switching tabs
   useEffect(() => {
-    setShieldBlockedCount(0);
-    setShowShieldPopup(false);
+    const timer = setTimeout(() => {
+      setShieldBlockedCount(0);
+      setShowShieldPopup(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [activePaneTabId]);
 
 
@@ -186,7 +190,7 @@ export default function NavigationBar() {
       const displayUrl = activeTab.url.replace('browser://', 'verse://');
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setInputValue(isNewTab ? '' : displayUrl);
-      
+
       if (isNewTab && inputRef.current) {
         // Use a small timeout to ensure the tab switch and render are complete
         setTimeout(() => {
@@ -264,7 +268,7 @@ export default function NavigationBar() {
 
   const handleReloadOrStop = () => {
     if (!window.electron?.tabManager) return;
-    
+
     if (activeTab?.isLoading) {
       window.electron.tabManager.action({ tabId: activePaneTabId, action: 'stop' });
     } else {
@@ -280,8 +284,8 @@ export default function NavigationBar() {
   const canGoForward = activeTab?.history && activeTab.historyIndex < activeTab.history.length - 1;
 
   const activeDownload = (downloads || []).find(d => d.state === 'progressing');
-  const downloadProgress = activeDownload && activeDownload.totalBytes > 0 
-    ? (activeDownload.receivedBytes / activeDownload.totalBytes) * 100 
+  const downloadProgress = activeDownload && activeDownload.totalBytes > 0
+    ? (activeDownload.receivedBytes / activeDownload.totalBytes) * 100
     : 0;
 
   return (
@@ -289,8 +293,9 @@ export default function NavigationBar() {
       {/* Navigation Controls */}
       <div className="flex items-center space-x-1 text-foreground/70 relative">
         <PermissionPrompt />
-        <button 
-          onClick={handleBack} 
+
+        <button
+          onClick={handleBack}
           aria-label="Go back"
           className={clsx(
             "p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5",
@@ -299,8 +304,9 @@ export default function NavigationBar() {
         >
           <ArrowLeft size={18} />
         </button>
-        <button 
-          onClick={handleForward} 
+
+        <button
+          onClick={handleForward}
           aria-label="Go forward"
           className={clsx(
             "p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5",
@@ -309,15 +315,17 @@ export default function NavigationBar() {
         >
           <ArrowRight size={18} />
         </button>
-        <button 
+
+        <button
           onClick={handleReloadOrStop}
           aria-label={activeTab?.isLoading ? "Stop loading" : "Reload page"}
           className="p-2 rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5"
         >
           {activeTab?.isLoading ? <X size={18} /> : <RotateCw size={18} />}
         </button>
+
         {showHomeButton && (
-          <button 
+          <button
             onClick={handleHome}
             aria-label="Go home"
             className="p-2 rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none mx-0.5"
@@ -330,61 +338,10 @@ export default function NavigationBar() {
       {/* URL / Search Bar */}
       <div className="flex-1 relative mx-2" role="search">
         <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
-          <div className="relative flex items-center" ref={shieldRef}>
-            {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
-              <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
-            ) : (
-              <button 
-                onClick={() => {
-                  setShowShieldPopup(!showShieldPopup);
-                  setShowSiteSettings(false);
-                }}
-                className={clsx(
-                  "relative mr-2 transition-colors p-1 rounded-full hover:bg-foreground/10",
-                  showShieldPopup ? "text-emerald-400" : "text-foreground/50 hover:text-foreground"
-                )}
-                title="Verse Shield — Ad & Tracker Blocker"
-                aria-label="Verse Shield"
-                aria-haspopup="dialog"
-                aria-expanded={showShieldPopup}
-              >
-                {showShieldPopup ? <ShieldCheck size={14} /> : <Shield size={14} />}
-                {shieldBlockedCount > 0 && !showShieldPopup && (
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-orange-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none shadow-sm">
-                    {shieldBlockedCount > 99 ? '99+' : shieldBlockedCount}
-                  </span>
-                )}
-              </button>
-            )}
-            {canReadMode && (
-              <button 
-                onClick={async () => {
-                  let liveHtml = null;
-                  try {
-                    liveHtml = await window.electron.tabManager.executeJavaScript({ 
-                      tabId: activePaneTabId, 
-                      code: 'document.documentElement.outerHTML' 
-                    });
-                  } catch (e) {
-                    console.error("Failed to get live HTML for reader mode:", e);
-                  }
-                  openReaderMode(activeTab.url, liveHtml);
-                }}
-                className="mr-2 text-foreground/50 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-500/10"
-                title="Enter Reader Mode"
-                aria-label="Enter Reader Mode"
-              >
-                <BookOpen size={14} />
-              </button>
-            )}
-            {showShieldPopup && (
-              <VerseShieldPopup 
-                url={activeTab?.url}
-                tabId={activePaneTabId}
-                onClose={() => setShowShieldPopup(false)} 
-              />
-            )}
-          </div>
+          {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') && (
+            <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
+          ) }
+
           <input
             ref={inputRef}
             type="text"
@@ -399,7 +356,7 @@ export default function NavigationBar() {
           />
           {zoomPercentage !== 100 && (
             <div className="relative flex items-center ml-1" ref={zoomRef}>
-              <button 
+              <button
                 onClick={() => setShowZoomPopup(!showZoomPopup)}
                 className="p-1 rounded-md transition-colors text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
                 title="Zoom: this page is zoomed"
@@ -410,20 +367,22 @@ export default function NavigationBar() {
                 <ZoomIn size={16} />
               </button>
               {showZoomPopup && (
-                <ZoomPopup 
-                  onClose={() => setShowZoomPopup(false)} 
+                <ZoomPopup
+                  onClose={() => setShowZoomPopup(false)}
                   zoomPercentage={zoomPercentage}
                   activePaneTabId={activePaneTabId}
                 />
               )}
             </div>
           )}
-          <button 
+
+          {/* bookmark button */}
+          <button
             onClick={() => toggleBookmark(activeTab?.url, activeTab?.title, activeTab?.favicon)}
             className={clsx(
               "p-1 rounded-md transition-colors ml-1",
-              isBookmarked 
-                ? "text-yellow-400 fill-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20" 
+              isBookmarked
+                ? "text-yellow-400 fill-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20"
                 : "text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
             )}
             title={isBookmarked ? "Remove bookmark" : "Bookmark this tab"}
@@ -431,8 +390,9 @@ export default function NavigationBar() {
           >
             <Star size={16} className={isBookmarked ? "fill-current" : ""} />
           </button>
-          
-          <button 
+
+          {/* readlsit btn */}
+          <button
             onClick={() => {
               if (isReadingListSaved && activeReadingListItem) {
                 removeFromReadingList(activeReadingListItem.id);
@@ -442,8 +402,8 @@ export default function NavigationBar() {
             }}
             className={clsx(
               "p-1 rounded-md transition-colors ml-1",
-              isReadingListSaved 
-                ? "text-blue-400 bg-blue-400/10 hover:bg-blue-400/20" 
+              isReadingListSaved
+                ? "text-blue-400 bg-blue-400/10 hover:bg-blue-400/20"
                 : "text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
             )}
             title={isReadingListSaved ? "Remove from Reading List" : "Add to Reading List"}
@@ -451,6 +411,69 @@ export default function NavigationBar() {
           >
             <Bookmark size={16} className={isReadingListSaved ? "fill-current" : ""} />
           </button>
+
+          <div className="relative flex items-center" ref={shieldRef}>
+
+            {canReadMode && (
+              <button
+                onClick={async () => {
+                  let liveHtml = null;
+                  try {
+                    liveHtml = await window.electron.tabManager.executeJavaScript({
+                      tabId: activePaneTabId,
+                      code: 'document.documentElement.outerHTML'
+                    });
+                  } catch (e) {
+                    console.error("Failed to get live HTML for reader mode:", e);
+                  }
+                  openReaderMode(activeTab.url, liveHtml);
+                }}
+                className="mr-2 text-foreground/50 hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-blue-500/10"
+                title="Enter Reader Mode"
+                aria-label="Enter Reader Mode"
+              >
+                <BookOpen size={14} />
+              </button>
+            )}
+
+            {showShieldPopup && (
+              <VerseShieldPopup
+                url={activeTab?.url}
+                tabId={activePaneTabId}
+                onClose={() => setShowShieldPopup(false)}
+              />
+            )}
+
+            {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
+              <div></div>
+              // <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
+            ) : (
+              <>
+                <span className="text-gray-500 me-1">|</span>
+                <button
+                  onClick={() => {
+                    setShowShieldPopup(!showShieldPopup);
+                    setShowSiteSettings(false);
+                  }}
+                  className={clsx(
+                    "relative mr-2 transition-colors p-1 rounded-full hover:bg-foreground/10",
+                    showShieldPopup ? "text-emerald-400" : "text-foreground/50 hover:text-foreground"
+                  )}
+                  title="Verse Shield — Ad & Tracker Blocker"
+                  aria-label="Verse Shield"
+                  aria-haspopup="dialog"
+                  aria-expanded={showShieldPopup}
+                >
+                  <Image src="/favicon.png" alt="Verse Shield" width={20} height={20} className="w-5 h-5" />
+                  {shieldBlockedCount > 0 && !showShieldPopup && (
+                    <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 bg-orange-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none shadow-sm">
+                      {shieldBlockedCount > 99 ? '99+' : shieldBlockedCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
         </div>
         {isFocused && suggestions.length > 0 && (
           <SuggestionsDropdown
@@ -469,7 +492,7 @@ export default function NavigationBar() {
       <div className="flex items-center space-x-0.5 text-foreground/70" ref={overflowMenuRef}>
         {showDownloadBtn && (
           <div className="relative hidden lg:flex" ref={downloadsRef}>
-            <button 
+            <button
               onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
               aria-label="Downloads"
               aria-haspopup="dialog"
@@ -483,12 +506,12 @@ export default function NavigationBar() {
               {activeDownload && (
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 44 44">
                   <circle cx="22" cy="22" r="16" fill="none" className="stroke-foreground/10" strokeWidth="2.5" />
-                  <circle 
-                    cx="22" cy="22" r="16" 
-                    fill="none" 
-                    className="stroke-accent transition-all duration-300 ease-out" 
-                    strokeWidth="2.5" 
-                    strokeDasharray={100.5} 
+                  <circle
+                    cx="22" cy="22" r="16"
+                    fill="none"
+                    className="stroke-accent transition-all duration-300 ease-out"
+                    strokeWidth="2.5"
+                    strokeDasharray={100.5}
                     strokeDashoffset={100.5 - (downloadProgress / 100) * 100.5}
                     strokeLinecap="round"
                   />
@@ -499,7 +522,7 @@ export default function NavigationBar() {
             {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
           </div>
         )}
-        <button 
+        <button
           disabled
           aria-label="Extensions"
           className="p-2 rounded-full transition-colors hidden lg:flex min-w-10 min-h-10 items-center justify-center focus-visible:ring-2 focus-visible:outline-none opacity-50 cursor-not-allowed"
@@ -511,7 +534,7 @@ export default function NavigationBar() {
         {/* User Account / Incognito */}
         <div className="relative flex items-center pl-1" ref={profileRef}>
           {isIncognitoWindow ? (
-            <button 
+            <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70"
               aria-label="Incognito mode"
@@ -522,7 +545,7 @@ export default function NavigationBar() {
               <span className="text-xs font-medium">Incognito</span>
             </button>
           ) : (
-            <button 
+            <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Profile menu"
@@ -534,9 +557,9 @@ export default function NavigationBar() {
                 <img src={userProfilePic} alt="Profile" className="w-full h-full rounded-full object-cover" />
               ) : currentProfileId !== 'guest' ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                  src={profiles.find(p => p.id === currentProfileId)?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main"} 
-                  alt="Profile" 
+                <img
+                  src={profiles.find(p => p.id === currentProfileId)?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=main"}
+                  alt="Profile"
                   className="w-full h-full rounded-full object-cover border border-border/50 bg-background"
                 />
               ) : (
@@ -554,7 +577,7 @@ export default function NavigationBar() {
 
         {/* Split View Toggle / Close */}
         {splitTabId && (
-          <button 
+          <button
             onClick={clearSplitView}
             aria-label="Close Split View"
             className="p-2 rounded-full transition-colors flex items-center justify-center bg-accent text-white hover:bg-accent-hover px-3 text-sm font-medium mr-1 min-h-10 focus-visible:ring-2 focus-visible:outline-none"
@@ -563,7 +586,7 @@ export default function NavigationBar() {
           </button>
         )}
 
-        <button 
+        <button
           onClick={toggleAISidebar}
           aria-label="Toggle AI Sidebar"
           className={`p-2 rounded-full transition-colors flex items-center justify-center min-w-10 min-h-10 focus-visible:ring-2 focus-visible:outline-none ${isAISidebarOpen ? 'bg-accent/20 text-accent hover:bg-accent/30' : 'hover:bg-foreground/10 hover:text-foreground'}`}

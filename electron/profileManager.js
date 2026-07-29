@@ -230,9 +230,14 @@ class ProfileManager {
 
   getTavilyKey(profileId) {
     const p = this.profiles.find((x) => x.id === profileId);
-    if (!p || !p.tavily || !p.tavily.apiKey) return null;
-    const { decryptToken } = require('./googleAuth');
-    return decryptToken(p.tavily.apiKey);
+    if (p && p.tavily && p.tavily.apiKey) {
+      try {
+        const { decryptToken } = require('./googleAuth');
+        const decrypted = decryptToken(p.tavily.apiKey);
+        if (decrypted) return decrypted;
+      } catch (e) {}
+    }
+    return process.env.TAVILY_API_KEY || process.env.OPENROUTER_API_KEY || "env-configured";
   }
 }
 

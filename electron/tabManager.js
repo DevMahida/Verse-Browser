@@ -14,6 +14,9 @@ const isGoogleAuthUrl = (url) => {
 };
 
 
+const checkCanGoBack = (wc) => (wc?.navigationHistory ? wc.navigationHistory.canGoBack() : wc?.canGoBack());
+const checkCanGoForward = (wc) => (wc?.navigationHistory ? wc.navigationHistory.canGoForward() : wc?.canGoForward());
+
 function initTabManager() {
   if (isInitialized) return;
   isInitialized = true;
@@ -38,12 +41,7 @@ function initTabManager() {
       }
     });
 
-    // --- Comprehensive anti-detection for Google Sign-In ---
-    // Google checks multiple signals: UA string, Sec-CH-UA headers,
-    // navigator.webdriver, window.chrome, navigator.plugins.
-    // We must address ALL of them or sign-in gets blocked.
-
-
+    view.webContents.setMaxListeners(100);
 
     // Make sure we have a solid background color so it's not transparent
     view.setBackgroundColor('#ffffff');
@@ -51,7 +49,7 @@ function initTabManager() {
     views.set(tabId, view);
 
     // Attach Verse Shield navigation guards (HTTPS upgrade + tracking-param stripping)
-    attachNavigationShields(view.webContents);
+    attachNavigationShields(view.webContents, tabId);
     // Attach cosmetic filters and scriptlets (e.g. YouTube Ad Skipper)
     attachCosmeticFilters(view.webContents);
     
@@ -84,7 +82,7 @@ function initTabManager() {
         const target = new URL(navigationUrl).searchParams.get('url');
         displayUrl = `view-source:${target}`;
       }
-      forwardEvent('did-navigate', { url: displayUrl, canGoBack: view.webContents.canGoBack(), canGoForward: view.webContents.canGoForward() });
+      forwardEvent('did-navigate', { url: displayUrl, canGoBack: checkCanGoBack(view.webContents), canGoForward: checkCanGoForward(view.webContents) });
       
       if (globalForceDarkEnabled) {
         applyForceDarkToView(view, true, navigationUrl);
@@ -98,7 +96,7 @@ function initTabManager() {
         const target = new URL(navigationUrl).searchParams.get('url');
         displayUrl = `view-source:${target}`;
       }
-      forwardEvent('did-navigate-in-page', { url: displayUrl, canGoBack: view.webContents.canGoBack(), canGoForward: view.webContents.canGoForward() });
+      forwardEvent('did-navigate-in-page', { url: displayUrl, canGoBack: checkCanGoBack(view.webContents), canGoForward: checkCanGoForward(view.webContents) });
 
       if (globalForceDarkEnabled) {
         applyForceDarkToView(view, true);
@@ -107,7 +105,7 @@ function initTabManager() {
     view.webContents.on('page-title-updated', (e, title) => forwardEvent('page-title-updated', { title }));
     view.webContents.on('page-favicon-updated', (e, favicons) => forwardEvent('page-favicon-updated', { favicons }));
     view.webContents.on('did-start-loading', () => forwardEvent('did-start-loading'));
-    view.webContents.on('did-stop-loading', () => forwardEvent('did-stop-loading', { canGoBack: view.webContents.canGoBack(), canGoForward: view.webContents.canGoForward() }));
+    view.webContents.on('did-stop-loading', () => forwardEvent('did-stop-loading', { canGoBack: checkCanGoBack(view.webContents), canGoForward: checkCanGoForward(view.webContents) }));
     view.webContents.on('did-fail-load', (e, errorCode, errorDescription) => {
       if (errorCode !== -3) forwardEvent('did-fail-load', { errorCode, errorDescription });
     });
@@ -301,11 +299,11 @@ function initTabManager() {
         break;
       case 'goBack':
       case 'go-back':
-        if (view.webContents.canGoBack()) view.webContents.goBack();
+        if (checkCanGoBack(view.webContents)) view.webContents.goBack();
         break;
       case 'goForward':
       case 'go-forward':
-        if (view.webContents.canGoForward()) view.webContents.goForward();
+        if (checkCanGoForward(view.webContents)) view.webContents.goForward();
         break;
       case 'copy':
         view.webContents.copy();
@@ -408,7 +406,12 @@ function initTabManager() {
   ipcMain.handle('tab-execute-javascript', async (event, { tabId, code }) => {
     const view = views.get(tabId);
     if (!view || view.webContents.isDestroyed()) return null;
-    return await view.webContents.executeJavaScript(code);
+    try {
+      return await view.webContents.executeJavaScript(code);
+    } catch (e) {
+      console.warn(`[tabManager] executeJavaScript failed for tab ${tabId}:`, e.message);
+      return null;
+    }
   });
 
   ipcMain.handle('tab-capture-page', async (event, tabId) => {
@@ -424,4 +427,5 @@ function initTabManager() {
   });
 }
 
-module.exports = { initTabManager };
+module.exports = { initTabManager, getViewsMap: () => views };
+

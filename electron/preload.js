@@ -78,7 +78,7 @@ contextBridge.exposeInMainWorld("electron", {
     },
     // Verse Shield (Ad & Tracker Blocker)
     shield: {
-      getStatus: () => ipcRenderer.invoke('shield:getStatus'),
+      getStatus: (data) => ipcRenderer.invoke('shield:getStatus', data),
       setForSite: (hostname, enabled) => ipcRenderer.invoke('shield:setForSite', hostname, enabled),
       setGlobal: (enabled) => ipcRenderer.invoke('shield:setGlobal', enabled),
     },

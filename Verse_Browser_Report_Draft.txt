@@ -1,4 +1,4 @@
-# Verse Browser: An AI-Powered Desktop Browser
+﻿# Verse Browser: An AI-Powered Desktop Browser
 
 ## An Internship Project Report
 

@@ -104,11 +104,11 @@ function setupContextMenu(webContents) {
     // 3. Video
     if (mediaType === 'video') {
       template.push(
-        { label: mediaFlags.isPaused ? 'Play' : 'Pause', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).${mediaFlags.isPaused ? 'play' : 'pause'}();`) },
-        { label: mediaFlags.isMuted ? 'Unmute' : 'Mute', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).muted = ${!mediaFlags.isMuted};`) },
-        { label: 'Loop', type: 'checkbox', checked: mediaFlags.isLooping, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).loop = ${!mediaFlags.isLooping};`) },
-        { label: 'Show controls', type: 'checkbox', checked: mediaFlags.isControlsVisible, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).controls = ${!mediaFlags.isControlsVisible};`) },
-        { label: 'Picture-in-picture', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).requestPictureInPicture?.();`) },
+        { label: mediaFlags.isPaused ? 'Play' : 'Pause', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).${mediaFlags.isPaused ? 'play' : 'pause'}();`).catch(() => {}) },
+        { label: mediaFlags.isMuted ? 'Unmute' : 'Mute', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).muted = ${!mediaFlags.isMuted};`).catch(() => {}) },
+        { label: 'Loop', type: 'checkbox', checked: mediaFlags.isLooping, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).loop = ${!mediaFlags.isLooping};`).catch(() => {}) },
+        { label: 'Show controls', type: 'checkbox', checked: mediaFlags.isControlsVisible, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).controls = ${!mediaFlags.isControlsVisible};`).catch(() => {}) },
+        { label: 'Picture-in-picture', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).requestPictureInPicture?.();`).catch(() => {}) },
         { type: 'separator' },
         { label: 'Save video as…', click: () => webContents.downloadURL(srcURL) },
         { label: 'Copy video URL', click: () => clipboard.writeText(srcURL) },
@@ -120,10 +120,10 @@ function setupContextMenu(webContents) {
     // 4. Audio
     if (mediaType === 'audio') {
       template.push(
-        { label: mediaFlags.isPaused ? 'Play' : 'Pause', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).${mediaFlags.isPaused ? 'play' : 'pause'}();`) },
-        { label: mediaFlags.isMuted ? 'Unmute' : 'Mute', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).muted = ${!mediaFlags.isMuted};`) },
-        { label: 'Loop', type: 'checkbox', checked: mediaFlags.isLooping, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).loop = ${!mediaFlags.isLooping};`) },
-        { label: 'Show controls', type: 'checkbox', checked: mediaFlags.isControlsVisible, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).controls = ${!mediaFlags.isControlsVisible};`) },
+        { label: mediaFlags.isPaused ? 'Play' : 'Pause', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).${mediaFlags.isPaused ? 'play' : 'pause'}();`).catch(() => {}) },
+        { label: mediaFlags.isMuted ? 'Unmute' : 'Mute', click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).muted = ${!mediaFlags.isMuted};`).catch(() => {}) },
+        { label: 'Loop', type: 'checkbox', checked: mediaFlags.isLooping, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).loop = ${!mediaFlags.isLooping};`).catch(() => {}) },
+        { label: 'Show controls', type: 'checkbox', checked: mediaFlags.isControlsVisible, click: () => webContents.executeJavaScript(`document.elementFromPoint(${x}, ${y}).controls = ${!mediaFlags.isControlsVisible};`).catch(() => {}) },
         { type: 'separator' },
         { label: 'Save audio as…', click: () => webContents.downloadURL(srcURL) },
         { label: 'Copy audio URL', click: () => clipboard.writeText(srcURL) },
@@ -148,7 +148,7 @@ function setupContextMenu(webContents) {
                             link.click();
                         }
                     })();
-                `);
+                `).catch(() => {});
             }
         },
         { type: 'separator' }
@@ -203,12 +203,15 @@ function setupContextMenu(webContents) {
       );
     }
 
+    const canGoBack = (wc) => (wc?.navigationHistory ? wc.navigationHistory.canGoBack() : wc?.canGoBack());
+    const canGoForward = (wc) => (wc?.navigationHistory ? wc.navigationHistory.canGoForward() : wc?.canGoForward());
+
     // 8. Page Background / IFrame
     if (!linkURL && mediaType === 'none' && !isEditable && !selectionText) {
       if (isFrame) {
         template.push(
-          { label: 'Back', click: () => webContents.goBack(), enabled: webContents.canGoBack() },
-          { label: 'Forward', click: () => webContents.goForward(), enabled: webContents.canGoForward() },
+          { label: 'Back', click: () => webContents.goBack(), enabled: canGoBack(webContents) },
+          { label: 'Forward', click: () => webContents.goForward(), enabled: canGoForward(webContents) },
           { label: 'Reload frame', click: () => webContents.reload() },
           { type: 'separator' },
           { label: 'Save frame as…', click: () => webContents.downloadURL(frameURL) },
@@ -218,8 +221,8 @@ function setupContextMenu(webContents) {
         );
       } else {
         template.push(
-          { label: 'Back', click: () => webContents.goBack(), enabled: webContents.canGoBack() },
-          { label: 'Forward', click: () => webContents.goForward(), enabled: webContents.canGoForward() },
+          { label: 'Back', click: () => webContents.goBack(), enabled: canGoBack(webContents) },
+          { label: 'Forward', click: () => webContents.goForward(), enabled: canGoForward(webContents) },
           { label: 'Reload', click: () => webContents.reload() },
           { type: 'separator' },
           { label: 'Save as…', click: () => webContents.downloadURL(webContents.getURL()) },

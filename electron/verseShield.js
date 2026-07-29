@@ -1,276 +1,195 @@
-const { app, session, ipcMain, webContents: webContentsAPI } = require('electron');
+const { app, ipcMain, BrowserWindow, webContents } = require('electron');
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
+const { NetworkFilter } = require('@ghostery/adblocker');
 const fetch = require('cross-fetch');
 const fs = require('fs');
 const path = require('path');
 
 const engineCacheFile = () => path.join(app.getPath('userData'), 'shield-engine.bin');
-const engineMetaFile = () => path.join(app.getPath('userData'), 'shield-engine-meta.json');
 const settingsFile = () => path.join(app.getPath('userData'), 'shield-settings.json');
-
-// Same lists fromPrebuiltAdsAndTracking used under the hood — fetched
-// directly here so per-site exceptions can be appended before parsing.
-const FILTER_LIST_URLS = [
-  'https://easylist.to/easylist/easylist.txt',
-  'https://easylist.to/easylist/easyprivacy.txt',
-];
-
 let blockerInstance = null;
-const activeSessions = new Set(); // sessions currently running shields — for reapplying after a rebuild
-const blockedCounts = new Map(); // webContents.id -> count, reset per main-frame navigation
+let blockerEventsAttached = false;
+const activeSessions = new Set();
+const blockedCounts = new Map(); // Verse tab ID -> { ads, trackers, fingerprints }
 
-const TRACKING_PARAMS = [
-  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-  'fbclid', 'gclid', 'msclkid', 'mc_eid', 'igshid', 'twclid', 'yclid',
-];
-
-// ---------- Engine ----------
-//
-// Per-site allowlisting uses EasyList's own exception-rule syntax
-// (`@@||hostname^$document`) — the same mechanism uBlock Origin and Brave
-// use internally for "allowlist this site". Building this in means the
-// engine itself already knows to never block sonyliv.com, rather than
-// trying to intercept/override its decisions after the fact.
-//
-// Cached to disk, but the cache is invalidated whenever the override list
-// changes (tracked via engineMetaFile), so toggling a site rebuilds once,
-// not on every launch.
-
-async function fetchListText(url) {
-  const res = await fetch(url);
-  return res.text();
-}
-
-function exceptionFiltersFor(siteOverrides) {
-  return Object.entries(siteOverrides)
-    .filter(([, enabled]) => enabled === false)
-    .map(([hostname]) => `@@||${hostname}^$document`)
-    .join('\n');
-}
-
-async function buildEngine() {
-  const { siteOverrides } = loadSettings();
-  const overridesKey = JSON.stringify(siteOverrides);
-
-  try {
-    const meta = JSON.parse(fs.readFileSync(engineMetaFile(), 'utf-8'));
-    if (meta.overridesKey === overridesKey) {
-      return ElectronBlocker.deserialize(fs.readFileSync(engineCacheFile()));
-    }
-  } catch {
-    // no cache yet, or the override list changed since it was built — rebuild below
-  }
-
-  // Optimize base engine building by utilizing fromPrebuiltAdsAndTracking
-  // which internally handles smart fetching and caching of its own engine!
-  // Then we append our overrides.
-  const engine = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-  
-  // Dynamically inject our user's exception overrides without fetching EasyList again!
-  const exceptionFilters = exceptionFiltersFor(siteOverrides);
-  if (exceptionFilters) {
-    // We update the prebuilt engine with our exceptions!
-    engine.update(undefined, undefined, exceptionFilters);
-  }
-
-  fs.writeFileSync(engineCacheFile(), engine.serialize());
-  fs.writeFileSync(engineMetaFile(), JSON.stringify({ overridesKey }));
-  return engine;
-}
-
-async function getBlocker() {
-  if (blockerInstance) return blockerInstance;
-  blockerInstance = await buildEngine();
-  return blockerInstance;
-}
-
-// Call after setEnabledForHost() to make a toggle actually take effect —
-// rebuilds the engine and reapplies it to every session shields are
-// running on. Returns true so the caller knows to reload open tabs.
-async function rebuildAndReapply() {
-  const oldBlocker = blockerInstance;
-  blockerInstance = await buildEngine();
-  for (const ses of activeSessions) {
-    if (oldBlocker) {
-      oldBlocker.disableBlockingInSession(ses);
-    }
-    blockerInstance.enableBlockingInSession(ses);
-  }
-  return true;
-}
-
-// ---------- Settings ----------
-
+function emptyCounts() { return { ads: 0, trackers: 0, fingerprints: 0 }; }
 function loadSettings() {
-  try {
-    return JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
-  } catch {
-    return { globalEnabled: true, siteOverrides: {} }; // siteOverrides: { 'example.com': false }
-  }
+  try { return { globalEnabled: true, siteOverrides: {}, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; }
+  catch { return { globalEnabled: true, siteOverrides: {} }; }
 }
-
-function saveSettings(data) {
-  fs.writeFileSync(settingsFile(), JSON.stringify(data, null, 2));
-}
-
+function saveSettings(data) { fs.writeFileSync(settingsFile(), JSON.stringify(data, null, 2)); }
 function isEnabledForHost(hostname) {
   const { globalEnabled, siteOverrides } = loadSettings();
-  return hostname in siteOverrides ? siteOverrides[hostname] : globalEnabled;
+  return Object.prototype.hasOwnProperty.call(siteOverrides, hostname) ? siteOverrides[hostname] : globalEnabled;
 }
-
 function setEnabledForHost(hostname, enabled) {
-  const data = loadSettings();
-  data.siteOverrides[hostname] = enabled;
-  saveSettings(data);
-  // NOTE: this persists the preference, but enableShieldsOnSession() below
-  // blocks at the whole-SESSION level, not per-site — see the callout
-  // after this file about what it takes to actually enforce this toggle.
+  const settings = loadSettings();
+  settings.siteOverrides[hostname] = enabled;
+  saveSettings(settings);
 }
-
-function setGlobalEnabled(enabled) {
-  const data = loadSettings();
-  data.globalEnabled = enabled;
-  saveSettings(data);
+function exceptionRules() {
+  return Object.entries(loadSettings().siteOverrides)
+    .filter(([, enabled]) => !enabled)
+    .map(([hostname]) => `@@||${hostname}^`)
+    .join('\n');
 }
-
-// ---------- Wiring ad/tracker blocking into a session (call once per profile session) ----------
-
-async function enableShieldsOnSession(targetSession = session.defaultSession) {
-  const blocker = await getBlocker();
-  blocker.enableBlockingInSession(targetSession);
-  activeSessions.add(targetSession);
-
-  // Badge counting. Use request.tabId which reliably maps to the webContents.id
+async function buildEngine() {
+  // The prebuilt engine includes EasyList and EasyPrivacy. Cache avoids downloading lists at every launch.
+  const engine = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
+  const exceptions = exceptionRules();
+  if (exceptions) {
+    const filters = exceptions.split('\n').map(rule => NetworkFilter.parse(rule)).filter(Boolean);
+    engine.update({ newNetworkFilters: filters });
+  }
+  return engine;
+}
+async function getBlocker() {
+  if (!blockerInstance) blockerInstance = await buildEngine();
+  return blockerInstance;
+}
+function classify(url) {
+  if (/fingerprint|canvas|webrtc|audio.?context|client.?hints/i.test(url)) return 'fingerprints';
+  if (/analytics|metrics|telemetry|pixel|beacon|tracker|doubleclick|googletagmanager|facebook\.net/i.test(url)) return 'trackers';
+  return 'ads';
+}
+function publish(tabId, counts) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('adblocker-stat-update', { tabId, tab: counts });
+  }
+}
+function attachBlockEvents(blocker) {
+  if (blockerEventsAttached) return;
+  blockerEventsAttached = true;
   blocker.on('request-blocked', (request) => {
-    const tabId = request.tabId;
-    if (tabId) {
-      const current = blockedCounts.get(tabId) || 0;
-      blockedCounts.set(tabId, current + 1);
-
-      // Broadcast update to all browser windows so the UI can dynamically update the badge
-      for (const win of require('electron').BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed() && win.webContents) {
-          win.webContents.send('adblocker-stat-update', { 
-            tabId, 
-            tab: { ads: current + 1 } 
-          });
-        }
-      }
-    }
+    const wc = webContents.fromId(request.tabId);
+    const tabId = wc?._verseTabId;
+    if (!tabId) return;
+    const current = blockedCounts.get(tabId) || emptyCounts();
+    const kind = classify(request.url || '');
+    const next = { ...current, [kind]: current[kind] + 1 };
+    blockedCounts.set(tabId, next);
+    publish(tabId, next);
   });
 }
-
-// ---------- HTTPS upgrade + tracking-param stripping (call once per tab's webContents) ----------
-
-function cleanTrackingParams(urlString) {
-  const url = new URL(urlString);
-  let changed = false;
-  for (const param of TRACKING_PARAMS) {
-    if (url.searchParams.has(param)) {
-      url.searchParams.delete(param);
-      changed = true;
+async function enableShieldsOnSession(targetSession) {
+  if (!targetSession || activeSessions.has(targetSession)) return;
+  activeSessions.add(targetSession);
+  try {
+    const blocker = await getBlocker();
+    attachBlockEvents(blocker);
+    blocker.enableBlockingInSession(targetSession);
+  } catch (err) {
+    if (err.message && err.message.includes('Attempted to register a second handler')) {
+      // IPC handler for cosmetic filters was already registered globally
+    } else {
+      console.error('Failed to enable shields on session:', err);
     }
   }
-  return changed ? url.toString() : null;
 }
 
-function attachNavigationShields(tabWebContents) {
-  tabWebContents.on('will-navigate', (event, url) => {
-    let hostname;
-    try { hostname = new URL(url).hostname; } catch { return; }
-    if (!isEnabledForHost(hostname)) return;
-
-    if (url.startsWith('http://')) {
-      // Simplified: no fallback-on-failure yet if the site doesn't
-      // actually support HTTPS. Real Brave Standard mode silently falls
-      // back; that needs a did-fail-load listener paired with a retry —
-      // worth adding once this base version is confirmed working.
-      event.preventDefault();
-      tabWebContents.loadURL(url.replace('http://', 'https://'));
-      return;
+async function rebuildAndReapply() {
+  const old = blockerInstance;
+  blockerInstance = await buildEngine();
+  blockerEventsAttached = false;
+  attachBlockEvents(blockerInstance);
+  for (const ses of activeSessions) {
+    try {
+      old?.disableBlockingInSession(ses);
+      blockerInstance.enableBlockingInSession(ses);
+    } catch (err) {
+      if (!err.message?.includes('Attempted to register a second handler')) {
+        console.error('Failed to re-apply shields to session:', err);
+      }
     }
+  }
+}
 
-    const cleaned = cleanTrackingParams(url);
-    if (cleaned) {
-      event.preventDefault();
-      tabWebContents.loadURL(cleaned);
-    }
-  });
-
-  tabWebContents.on('did-start-navigation', (event, url, isInPlace, isMainFrame) => {
-    if (isMainFrame) blockedCounts.set(tabWebContents.id, 0);
+function attachNavigationShields(tabWebContents, tabId) {
+  tabWebContents._verseTabId = tabId;
+  tabWebContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) blockedCounts.set(tabId, emptyCounts());
   });
 }
-
-function getBlockedCount(tabWebContents) {
-  return blockedCounts.get(tabWebContents.id) || 0;
-}
-
-// ---------- Cosmetic Filtering & Scriptlets ----------
 
 function attachCosmeticFilters(tabWebContents) {
   tabWebContents.on('dom-ready', () => {
-    const url = tabWebContents.getURL();
-    let hostname;
-    try { hostname = new URL(url).hostname; } catch { return; }
-    
-    if (!isEnabledForHost(hostname)) return;
+    const host = (() => { try { return new URL(tabWebContents.getURL()).hostname; } catch { return ''; } })();
+    if (!host.includes('youtube.com') || !isEnabledForHost(host)) return;
+    const code = `(() => {
+      if (window.__verseYouTubeShield) return;
+      window.__verseYouTubeShield = true;
 
-    if (hostname.includes('youtube.com')) {
-      const skipperScript = `
-        (function() {
-          if (window.__verseAdSkipperInjected) return;
-          window.__verseAdSkipperInjected = true;
-          
-          setInterval(() => {
-            const skipBtn = document.querySelector('.ytp-skip-ad-button');
-            if (skipBtn) {
-              skipBtn.click();
+      const dismissAndUnblock = () => {
+        try {
+          // 1. Remove YouTube's Anti-Adblock Enforcement modals and overlays safely
+          document.querySelectorAll('ytd-enforcement-message-view-model, .ytp-error-screen').forEach(node => {
+            try { node.remove(); } catch (e) {}
+          });
+
+          document.querySelectorAll('tp-yt-paper-dialog, #error-screen').forEach(node => {
+            try {
+              if (node.querySelector && node.querySelector('ytd-enforcement-message-view-model')) {
+                node.remove();
+              }
+            } catch (e) {}
+          });
+
+          // Restore body scrolling if enforcement popup locked it
+          if (document.body && document.body.style.overflow === 'hidden') {
+            document.body.style.overflow = 'auto';
+          }
+
+          const player = document.querySelector('#movie_player');
+          const video = player ? player.querySelector('video') : document.querySelector('video');
+
+          // 2. Skip and fast-forward video ads if loaded
+          if (player && player.classList.contains('ad-showing')) {
+            document.querySelectorAll('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-container').forEach(b => b.click());
+            document.querySelectorAll('.ytp-ad-overlay-close-button, .ytp-ad-overlay-slot button[aria-label*="Close"]').forEach(b => b.click());
+            if (video) {
+              video.muted = true;
+              video.playbackRate = 16.0;
+              if (Number.isFinite(video.duration) && video.duration > 0) {
+                video.currentTime = Math.max(0, video.duration - 0.05);
+              }
             }
-            
-            const adVideo = document.querySelector('.ad-showing video');
-            if (adVideo && adVideo.duration) {
-              adVideo.currentTime = adVideo.duration;
+          }
+
+          // 3. Auto-resume video if YouTube paused it due to anti-adblock detection
+          if (video && video.paused && !player?.classList.contains('ad-showing')) {
+            const playBtn = document.querySelector('.ytp-play-button');
+            if (playBtn && playBtn.getAttribute('aria-label')?.includes('Play')) {
+              video.play().catch(() => {});
             }
-          }, 300);
-        })();
-      `;
-      tabWebContents.executeJavaScript(skipperScript).catch(err => {
-        console.error('Failed to inject YouTube ad skipper:', err);
-      });
-    }
+          }
+        } catch (err) {}
+      };
+
+      dismissAndUnblock();
+      const observer = new MutationObserver(dismissAndUnblock);
+      if (document.documentElement || document.body) {
+        observer.observe(document.documentElement || document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'style', 'open']
+        });
+      }
+      setInterval(dismissAndUnblock, 150);
+    })();`;
+    tabWebContents.executeJavaScript(code).catch(() => {});
   });
 }
-
-// ---------- IPC ----------
-
 function registerShieldHandlers() {
-  ipcMain.handle('shield:getStatus', (event) => {
-    const wc = event.sender;
-    let hostname = null;
-    try { hostname = new URL(wc.getURL()).hostname; } catch {}
-    return {
-      hostname,
-      enabled: hostname ? isEnabledForHost(hostname) : true,
-      blockedCount: getBlockedCount(wc),
-    };
-  });
-
-  ipcMain.handle('shield:setForSite', async (event, hostname, enabled) => {
+  ipcMain.handle('shield:getStatus', (_event, { hostname, tabId } = {}) => ({
+    hostname: hostname || null,
+    enabled: hostname ? isEnabledForHost(hostname) : true,
+    counts: blockedCounts.get(tabId) || emptyCounts(),
+  }));
+  ipcMain.handle('shield:setForSite', async (_event, hostname, enabled) => {
     setEnabledForHost(hostname, enabled);
     await rebuildAndReapply();
-    // The renderer UI (VerseShieldPopup) handles tab reload via tabManager.action
+    return { success: true };
   });
-
-  ipcMain.handle('shield:setGlobal', (_e, enabled) => setGlobalEnabled(enabled));
 }
-
-module.exports = {
-  enableShieldsOnSession,
-  attachNavigationShields,
-  attachCosmeticFilters,
-  getBlockedCount,
-  registerShieldHandlers,
-  isEnabledForHost,
-  rebuildAndReapply,
-};
+module.exports = { enableShieldsOnSession, attachNavigationShields, attachCosmeticFilters, registerShieldHandlers };

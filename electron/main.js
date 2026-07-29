@@ -1,3 +1,4 @@
+process.noDeprecation = true;
 const { app, BrowserWindow, ipcMain, session, Menu, screen, net, nativeTheme, protocol } = require("electron");
 
 protocol.registerSchemesAsPrivileged([
@@ -214,7 +215,7 @@ app.whenReady().then(async () => {
   // AND enable Verse Shield ad/tracker blocking on each new session partition.
   app.on('session-created', (sess) => {
     sess.setUserAgent(spoofedUA);
-    enableShieldsOnSession(sess);
+    enableShieldsOnSession(sess).catch(console.error);
   });
 
 
@@ -223,7 +224,7 @@ app.whenReady().then(async () => {
 
   // Register Verse Shield IPC handlers and enable ad/tracker blocking on the default session
   registerShieldHandlers();
-  enableShieldsOnSession(session.fromPartition('persist:main'));
+  await enableShieldsOnSession(session.fromPartition('persist:main'));
 
   initTabManager();
 
@@ -255,12 +256,11 @@ app.whenReady().then(async () => {
       }
 
       // Instruct the renderer to reload the tab to consume the new state
-      const viewsMap = require('./tabManager')._viewsMap || new Map();
-      // Wait, we don't have direct access to views Map from here easily unless exported.
-      // But tab-navigate or tab-action can be sent to the renderer, or we can just broadcast.
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('tab-event', {
+      const { getViewsMap } = require('./tabManager');
+      const viewsMap = getViewsMap ? getViewsMap() : new Map();
+      const targetWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('tab-event', {
           tabId,
           eventName: 'handoff-completed',
           data: { success: true }
@@ -296,6 +296,7 @@ app.whenReady().then(async () => {
   // switch-profile is now handled by profileManager.registerProfileHandlers
 
   // Setup an invisible application menu to handle global shortcuts reliably
+  const getTargetWin = () => BrowserWindow.getFocusedWindow() || mainWindow;
   const template = [
     {
       label: 'File',
@@ -303,12 +304,12 @@ app.whenReady().then(async () => {
         {
           label: 'New Tab',
           accelerator: 'CmdOrCtrl+T',
-          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'new-tab')
+          click: () => getTargetWin()?.webContents.send('keyboard-shortcut', 'new-tab')
         },
         {
           label: 'Close Tab',
           accelerator: 'CmdOrCtrl+W',
-          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'close-tab')
+          click: () => getTargetWin()?.webContents.send('keyboard-shortcut', 'close-tab')
         }
       ]
     },
@@ -318,7 +319,7 @@ app.whenReady().then(async () => {
         {
           label: 'Find',
           accelerator: 'CmdOrCtrl+F',
-          click: () => mainWindow?.webContents.send('keyboard-shortcut', 'find')
+          click: () => getTargetWin()?.webContents.send('keyboard-shortcut', 'find')
         },
         { role: 'undo' },
         { role: 'redo' },
@@ -337,8 +338,9 @@ app.whenReady().then(async () => {
           label: 'Toggle Developer Tools',
           accelerator: 'F12',
           click: () => {
-             if (mainWindow && !mainWindow.isDestroyed()) {
-               mainWindow.webContents.send('keyboard-shortcut', 'toggle-devtools');
+             const target = getTargetWin();
+             if (target && !target.isDestroyed()) {
+               target.webContents.send('keyboard-shortcut', 'toggle-devtools');
              }
           }
         },
@@ -346,8 +348,9 @@ app.whenReady().then(async () => {
           label: 'Toggle Developer Tools Alt',
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => {
-             if (mainWindow && !mainWindow.isDestroyed()) {
-               mainWindow.webContents.send('keyboard-shortcut', 'toggle-devtools');
+             const target = getTargetWin();
+             if (target && !target.isDestroyed()) {
+               target.webContents.send('keyboard-shortcut', 'toggle-devtools');
              }
           }
         },
@@ -355,8 +358,9 @@ app.whenReady().then(async () => {
           label: 'Inspect UI',
           accelerator: 'CmdOrCtrl+Shift+U',
           click: () => {
-             if (mainWindow && !mainWindow.isDestroyed()) {
-               mainWindow.webContents.toggleDevTools();
+             const target = getTargetWin();
+             if (target && !target.isDestroyed()) {
+               target.webContents.toggleDevTools();
              }
           }
         },
@@ -364,8 +368,9 @@ app.whenReady().then(async () => {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
           click: () => {
-             if (mainWindow && !mainWindow.isDestroyed()) {
-               mainWindow.webContents.send('keyboard-shortcut', 'reload');
+             const target = getTargetWin();
+             if (target && !target.isDestroyed()) {
+               target.webContents.send('keyboard-shortcut', 'reload');
              }
           }
         },
@@ -373,8 +378,9 @@ app.whenReady().then(async () => {
           label: 'Hard Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
           click: () => {
-             if (mainWindow && !mainWindow.isDestroyed()) {
-               mainWindow.webContents.send('keyboard-shortcut', 'hard-reload');
+             const target = getTargetWin();
+             if (target && !target.isDestroyed()) {
+               target.webContents.send('keyboard-shortcut', 'hard-reload');
              }
           }
         }
@@ -774,10 +780,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('ai-request', async (event, payload) => {
     try {
-      const apiKey = process.env.OPENROUTER_API_KEY;
-      if (!apiKey) return { error: 'Server API key not configured.' };
-
-      const { endpoint, payload: reqPayload } = payload;
+      const { endpoint, payload: reqPayload } = payload || {};
+      const apiKey = (reqPayload && reqPayload.apiKey) || (payload && payload.apiKey) || process.env.OPENROUTER_API_KEY;
+      if (!apiKey || !apiKey.trim()) {
+        return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEY in .env.local.' };
+      }
       const { text = '', html = '', query = '', title = '', url = '', selected_text = '', extraction_goal = '', platform = '', style = '', target_language = '' } = reqPayload;
 
       const pageCtx = `Page Title: ${title || 'Unknown'}\nPage URL: ${url || 'Unknown'}`;

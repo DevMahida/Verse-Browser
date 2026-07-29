@@ -1,4 +1,4 @@
-# 🧩 Verse Browser - Extensions Implementation Roadmap
+﻿# 🧩 Verse Browser - Extensions Implementation Roadmap
 
 This document categorizes all planned and candidate browser extensions for **Verse Browser** into 3 implementation difficulty levels based on technical complexity, required Electron APIs, state management, and security architecture.
 

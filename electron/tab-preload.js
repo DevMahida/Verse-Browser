@@ -21,7 +21,6 @@ try {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
 
       // 3. Disable WebAuthn to prevent Windows Defender Passkey popup during Google Login
-      // This forces Google to fall back to password or phone authentication.
       if (navigator.credentials) {
         navigator.credentials.get = undefined;
         navigator.credentials.create = undefined;
@@ -29,10 +28,40 @@ try {
       if (window.PublicKeyCredential) {
         window.PublicKeyCredential = undefined;
       }
+
+      // 4. YouTube Anti-Adblock Defusal & Player Protection
+      if (location.hostname.includes('youtube.com')) {
+        try {
+          if (window.yt && window.yt.config_) {
+            const flags = window.yt.config_.EXPERIMENT_FLAGS || {};
+            flags.ad_blocker_tasks_method = false;
+            flags.enable_ad_block_tech_detection = false;
+            flags.web_disable_adblock_warning = true;
+            flags.ad_privacy_banner_yt_config = false;
+            window.yt.config_.EXPERIMENT_FLAGS = flags;
+          }
+
+          let _resp = window.ytInitialPlayerResponse;
+          Object.defineProperty(window, 'ytInitialPlayerResponse', {
+            get: () => _resp,
+            set: (val) => {
+              if (val) {
+                if (val.adPlacements) val.adPlacements = [];
+                if (val.playerAds) val.playerAds = [];
+                if (val.adSlots) val.adSlots = [];
+              }
+              _resp = val;
+            },
+            configurable: true
+          });
+        } catch (ytErr) {
+          console.error("YouTube preload defuse error:", ytErr);
+        }
+      }
     } catch (e) {
       console.error("Failed to inject tab anti-detection:", e);
     }
-  `);
+  `).catch(() => {});
 } catch (e) {
   console.error("Failed to run webFrame.executeJavaScript:", e);
 }

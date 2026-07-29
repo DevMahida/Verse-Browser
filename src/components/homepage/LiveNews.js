@@ -297,10 +297,15 @@ export default function LiveNews() {
   }, []);
 
   useEffect(() => {
-    fetchNews(category);
+    const timer = setTimeout(() => {
+      fetchNews(category);
+    }, 0);
     // Auto-refresh every 5 minutes
     const interval = setInterval(() => fetchNews(category, true), 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [category, fetchNews]);
 
   const handleArticleClick = (article) => {
@@ -400,7 +405,7 @@ export default function LiveNews() {
               className="group flex flex-col bg-surface rounded-xl border border-border overflow-hidden hover:border-accent/30 transition-all cursor-pointer hover:shadow-[0_8px_30px_rgba(107,70,193,0.12)] hover:-translate-y-0.5 duration-300"
             >
               {/* Thumbnail / Gradient Area */}
-              <div className={`h-36 w-full bg-gradient-to-br ${getCategoryGradient(category)} relative overflow-hidden flex items-center justify-center border-b border-border`}>
+              <div className={`h-36 w-full bg-linear-to-br ${getCategoryGradient(category)} relative overflow-hidden flex items-center justify-center border-b border-border`}>
                 {article.imageUrl ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -412,7 +417,7 @@ export default function LiveNews() {
                       onLoad={(e) => { e.target.style.opacity = "1"; }}
                       onError={(e) => { e.target.style.display = "none"; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-surface via-surface/40 to-transparent" />
                   </>
                 ) : (
                   <>
@@ -425,7 +430,7 @@ export default function LiveNews() {
                     <div className="relative w-12 h-12 bg-surface/60 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/10 shadow-lg group-hover:scale-110 transition-transform duration-300">
                       <Newspaper className="w-5 h-5 text-foreground/60" />
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent opacity-60" />
+                    <div className="absolute inset-0 bg-linear-to-t from-surface to-transparent opacity-60" />
                   </>
                 )}
 

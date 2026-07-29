@@ -92,7 +92,7 @@ export default function ReaderPage({ url }) {
     return () => {
       isMounted.current = false;
     };
-  }, [readerUrl, activeTabId, updateTab]);
+  }, [readerUrl, activeTabId, updateTab, activeTab?.readerHtml]);
 
   const handleClose = () => {
     if (readerUrl) {
