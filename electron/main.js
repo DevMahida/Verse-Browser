@@ -10,6 +10,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 const { initTabManager } = require('./tabManager');
 const profileManager = require('./profileManager');
 const { loadWindowState, trackWindowState } = require('./windowBounds');
+const { enableShieldsOnSession, attachNavigationShields, registerShieldHandlers } = require('./verseShield');
 // const { authenticateWithGoogle } = require('./google-oauth'); // Disabled per user request
 
 const isDev = !app.isPackaged;
@@ -210,13 +211,19 @@ app.whenReady().then(async () => {
   session.defaultSession.setUserAgent(spoofedUA);
 
   // Ensure every newly created profile session partition also uses the spoofed Edge User-Agent
+  // AND enable Verse Shield ad/tracker blocking on each new session partition.
   app.on('session-created', (sess) => {
     sess.setUserAgent(spoofedUA);
+    enableShieldsOnSession(sess);
   });
 
 
 
   const savedState = loadWindowState();
+
+  // Register Verse Shield IPC handlers and enable ad/tracker blocking on the default session
+  registerShieldHandlers();
+  enableShieldsOnSession(session.fromPartition('persist:main'));
 
   initTabManager();
 

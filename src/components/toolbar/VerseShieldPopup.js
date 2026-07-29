@@ -113,8 +113,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
 
   const handleReload = () => {
     if (window.electron?.tabManager) {
-      // We call the API directly since the popup may not have store access
-      window.electron.tabManager.action({ tabId: undefined, action: 'reload' });
+      window.electron.tabManager.action({ tabId, action: 'reload' });
     }
     onClose();
   };
@@ -123,7 +122,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
 
   if (isInternalPage) {
     return (
-      <div ref={popupRef} className="absolute top-9 right-0 w-80 bg-surface border border-border rounded-xl shadow-2xl z-50 p-4">
+      <div ref={popupRef} className="absolute top-9 left-0 w-80 bg-surface border border-border rounded-xl shadow-2xl z-50 p-4">
         <div className="flex items-center space-x-2 text-foreground/70">
           <Shield size={18} />
           <span className="text-sm">Verse Shield is not available for internal pages.</span>
@@ -135,7 +134,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
   return (
     <div
       ref={popupRef}
-      className="absolute top-9 right-0 w-[320px] bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-50 overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150"
+      className="absolute top-9 left-0 w-[320px] bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-50 overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150"
     >
       {/* ─── Header: Domain + Shield Toggle ─── */}
       <div className={clsx(

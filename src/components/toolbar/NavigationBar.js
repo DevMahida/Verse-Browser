@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -10,6 +10,7 @@ import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
 import PermissionPrompt from "./PermissionPrompt";
 import SiteSettingsPopup from "./SiteSettingsPopup";
+import VerseShieldPopup from "./VerseShieldPopup";
 import HistoryPopup from "./HistoryPopup";
 import DownloadsPopup from "./DownloadsPopup";
 import BrowserMenu from "./BrowserMenu";
@@ -56,6 +57,8 @@ export default function NavigationBar() {
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
+  const [showShieldPopup, setShowShieldPopup] = useState(false);
+  const [shieldBlockedCount, setShieldBlockedCount] = useState(0);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -78,6 +81,7 @@ export default function NavigationBar() {
   const downloadsRef = useRef(null);
   const profileRef = useRef(null);
   const zoomRef = useRef(null);
+  const shieldRef = useRef(null);
 
   useEffect(() => {
     if (window.electron && window.electron.getProfiles) {
@@ -105,6 +109,9 @@ export default function NavigationBar() {
       if (zoomRef.current && !zoomRef.current.contains(e.target)) {
         setShowZoomPopup(false);
       }
+      if (shieldRef.current && !shieldRef.current.contains(e.target)) {
+        setShowShieldPopup(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -115,12 +122,13 @@ export default function NavigationBar() {
     if (showHistoryPopup) offset = 420;
     else if (showDownloadsPopup) offset = 420;
     else if (showSiteSettings) offset = 250;
+    else if (showShieldPopup) offset = 380;
     else if (showProfileMenu) offset = 500;
     else if (showZoomPopup) offset = 200;
     else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
     
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showProfileMenu, showZoomPopup, isFocused, suggestions.length, setDropdownOffset]);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, isFocused, suggestions.length, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;
@@ -151,6 +159,24 @@ export default function NavigationBar() {
 
   const hasActiveDownloads = (downloads || []).some(d => d.state === 'progressing');
   const showDownloadBtn = hasActiveDownloads || downloadJustFinished || showDownloadsPopup;
+
+  // --- Verse Shield: listen for live blocked-count updates ---
+  useEffect(() => {
+    if (!window.electron?.tabManager?.onAdBlockerStatUpdate) return;
+    const cleanup = window.electron.tabManager.onAdBlockerStatUpdate((data) => {
+      // Only update badge if it's for the currently active tab
+      if (data.tabId === activePaneTabId && data.tab) {
+        setShieldBlockedCount(data.tab.ads || 0);
+      }
+    });
+    return cleanup;
+  }, [activePaneTabId]);
+
+  // Reset shield badge count when switching tabs
+  useEffect(() => {
+    setShieldBlockedCount(0);
+    setShowShieldPopup(false);
+  }, [activePaneTabId]);
 
 
   useEffect(() => {
@@ -304,19 +330,30 @@ export default function NavigationBar() {
       {/* URL / Search Bar */}
       <div className="flex-1 relative mx-2" role="search">
         <div className="flex items-center h-10 bg-surface-hover hover:bg-surface-hover/80 rounded-full px-4 border border-transparent focus-within:border-accent focus-within:bg-background transition-colors shadow-sm">
-          <div className="relative flex items-center">
+          <div className="relative flex items-center" ref={shieldRef}>
             {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
               <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
             ) : (
               <button 
-                onClick={() => setShowSiteSettings(!showSiteSettings)}
-                className="mr-2 text-foreground/50 hover:text-foreground transition-colors p-1 rounded-full hover:bg-foreground/10"
-                title="Site settings"
-                aria-label="Site settings"
+                onClick={() => {
+                  setShowShieldPopup(!showShieldPopup);
+                  setShowSiteSettings(false);
+                }}
+                className={clsx(
+                  "relative mr-2 transition-colors p-1 rounded-full hover:bg-foreground/10",
+                  showShieldPopup ? "text-emerald-400" : "text-foreground/50 hover:text-foreground"
+                )}
+                title="Verse Shield — Ad & Tracker Blocker"
+                aria-label="Verse Shield"
                 aria-haspopup="dialog"
-                aria-expanded={showSiteSettings}
+                aria-expanded={showShieldPopup}
               >
-                <Shield size={14} />
+                {showShieldPopup ? <ShieldCheck size={14} /> : <Shield size={14} />}
+                {shieldBlockedCount > 0 && !showShieldPopup && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-orange-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none shadow-sm">
+                    {shieldBlockedCount > 99 ? '99+' : shieldBlockedCount}
+                  </span>
+                )}
               </button>
             )}
             {canReadMode && (
@@ -340,10 +377,11 @@ export default function NavigationBar() {
                 <BookOpen size={14} />
               </button>
             )}
-            {showSiteSettings && (
-              <SiteSettingsPopup 
-                url={activeTab?.url} 
-                onClose={() => setShowSiteSettings(false)} 
+            {showShieldPopup && (
+              <VerseShieldPopup 
+                url={activeTab?.url}
+                tabId={activePaneTabId}
+                onClose={() => setShowShieldPopup(false)} 
               />
             )}
           </div>

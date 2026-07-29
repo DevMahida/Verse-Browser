@@ -75,6 +75,17 @@ contextBridge.exposeInMainWorld("electron", {
       const handler = (_event, data) => callback(data);
       ipcRenderer.on('tab-event', handler);
       return () => ipcRenderer.removeListener('tab-event', handler);
+    },
+    // Verse Shield (Ad & Tracker Blocker)
+    shield: {
+      getStatus: () => ipcRenderer.invoke('shield:getStatus'),
+      setForSite: (hostname, enabled) => ipcRenderer.invoke('shield:setForSite', hostname, enabled),
+      setGlobal: (enabled) => ipcRenderer.invoke('shield:setGlobal', enabled),
+    },
+    onAdBlockerStatUpdate: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('adblocker-stat-update', handler);
+      return () => ipcRenderer.removeListener('adblocker-stat-update', handler);
     }
   },
 

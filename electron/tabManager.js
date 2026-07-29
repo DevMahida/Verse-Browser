@@ -1,5 +1,6 @@
 const { WebContentsView, ipcMain, BrowserWindow, app } = require('electron');
 const profileManager = require('./profileManager');
+const { attachNavigationShields, attachCosmeticFilters } = require('./verseShield');
 
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
@@ -48,6 +49,11 @@ function initTabManager() {
     view.setBackgroundColor('#ffffff');
     view._isAttached = false;
     views.set(tabId, view);
+
+    // Attach Verse Shield navigation guards (HTTPS upgrade + tracking-param stripping)
+    attachNavigationShields(view.webContents);
+    // Attach cosmetic filters and scriptlets (e.g. YouTube Ad Skipper)
+    attachCosmeticFilters(view.webContents);
     
     // Setup event forwarding bound specifically to the window that requested this tab
     const forwardEvent = (eventName, data = {}) => {

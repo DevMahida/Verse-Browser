@@ -1080,11 +1080,17 @@ export const useBrowserStore = create(
     if (extension.id === 'ext-dark-mode' && window.electron) {
       window.electron.tabManager.setForceDark(true);
     }
+    if (extension.id === 'ext-ad-blocker' && window.electron?.tabManager?.shield) {
+      window.electron.tabManager.shield.setGlobal(true);
+    }
     return { installedExtensions: [...state.installedExtensions, { ...extension, isEnabled: true }] };
   }),
   uninstallExtension: (id) => set((state) => {
     if (id === 'ext-dark-mode' && window.electron) {
       window.electron.tabManager.setForceDark(false);
+    }
+    if (id === 'ext-ad-blocker' && window.electron?.tabManager?.shield) {
+      window.electron.tabManager.shield.setGlobal(false);
     }
     return {
       installedExtensions: state.installedExtensions.filter(e => e.id !== id)
@@ -1094,6 +1100,9 @@ export const useBrowserStore = create(
     const ext = state.installedExtensions.find(e => e.id === id);
     if (id === 'ext-dark-mode' && window.electron && ext) {
       window.electron.tabManager.setForceDark(!ext.isEnabled);
+    }
+    if (id === 'ext-ad-blocker' && window.electron?.tabManager?.shield && ext) {
+      window.electron.tabManager.shield.setGlobal(!ext.isEnabled);
     }
     return {
       installedExtensions: state.installedExtensions.map(e => 

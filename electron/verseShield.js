@@ -206,6 +206,42 @@ function getBlockedCount(tabWebContents) {
   return blockedCounts.get(tabWebContents.id) || 0;
 }
 
+// ---------- Cosmetic Filtering & Scriptlets ----------
+
+function attachCosmeticFilters(tabWebContents) {
+  tabWebContents.on('dom-ready', () => {
+    const url = tabWebContents.getURL();
+    let hostname;
+    try { hostname = new URL(url).hostname; } catch { return; }
+    
+    if (!isEnabledForHost(hostname)) return;
+
+    if (hostname.includes('youtube.com')) {
+      const skipperScript = `
+        (function() {
+          if (window.__verseAdSkipperInjected) return;
+          window.__verseAdSkipperInjected = true;
+          
+          setInterval(() => {
+            const skipBtn = document.querySelector('.ytp-skip-ad-button');
+            if (skipBtn) {
+              skipBtn.click();
+            }
+            
+            const adVideo = document.querySelector('.ad-showing video');
+            if (adVideo && adVideo.duration) {
+              adVideo.currentTime = adVideo.duration;
+            }
+          }, 300);
+        })();
+      `;
+      tabWebContents.executeJavaScript(skipperScript).catch(err => {
+        console.error('Failed to inject YouTube ad skipper:', err);
+      });
+    }
+  });
+}
+
 // ---------- IPC ----------
 
 function registerShieldHandlers() {
@@ -223,7 +259,7 @@ function registerShieldHandlers() {
   ipcMain.handle('shield:setForSite', async (event, hostname, enabled) => {
     setEnabledForHost(hostname, enabled);
     await rebuildAndReapply();
-    event.sender.reload(); // matches Brave's own behavior — a toggle applies on reload, not mid-page
+    // The renderer UI (VerseShieldPopup) handles tab reload via tabManager.action
   });
 
   ipcMain.handle('shield:setGlobal', (_e, enabled) => setGlobalEnabled(enabled));
@@ -232,6 +268,7 @@ function registerShieldHandlers() {
 module.exports = {
   enableShieldsOnSession,
   attachNavigationShields,
+  attachCosmeticFilters,
   getBlockedCount,
   registerShieldHandlers,
   isEnabledForHost,
