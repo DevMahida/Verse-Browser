@@ -82,3 +82,10 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+/* Make all clickable elements use a pointer cursor */
+button, 
+a, 
+[role="button"] {
+  cursor: pointer;
+}

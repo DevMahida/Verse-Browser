@@ -31,11 +31,11 @@ export default function CustomizeThemeModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="customize-theme-title">
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="customize-theme-title">
+      <div className="bg-surface border  border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-surface">
+        <div className="flex-none flex items-center justify-between p-4 border-b border-border bg-surface">
           <h2 id="customize-theme-title" className="text-xl font-semibold text-foreground flex items-center gap-2">
             <Palette className="w-5 h-5 text-accent" />
             Customize Verse
@@ -49,7 +49,7 @@ export default function CustomizeThemeModal({ onClose }) {
           </button>
         </div>
 
-        <div className="p-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
+        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
           
           {/* Theme Mode */}
           <section className="mb-8">
@@ -85,7 +85,21 @@ export default function CustomizeThemeModal({ onClose }) {
           {/* Custom Colors */}
           {theme === 'custom' && (
             <section className="mb-8 animate-in slide-in-from-top-2 duration-300">
-              <h3 className="text-sm font-medium text-foreground/70 uppercase tracking-wider mb-3">Custom Colors</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-foreground/70 uppercase tracking-wider">Custom Colors</h3>
+                <button 
+                  onClick={() => setCustomColors({
+                    background: '#0f1015',
+                    surface: '#1a1b23',
+                    border: '#2d3748',
+                    primary: '#6b46c1',
+                    text: '#e2e8f0',
+                  })}
+                  className="text-xs px-2 py-1 rounded-md bg-surface-hover hover:bg-surface-hover/80 text-foreground/80 hover:text-foreground transition-colors border border-border flex items-center gap-1"
+                >
+                  Reset to Default
+                </button>
+              </div>
               <div className="space-y-4">
                 <ColorPicker label="Background" value={customColors.background} onChange={(c) => handleColorChange('background', c)} />
                 <ColorPicker label="Surface (Cards, Bars)" value={customColors.surface} onChange={(c) => handleColorChange('surface', c)} />
