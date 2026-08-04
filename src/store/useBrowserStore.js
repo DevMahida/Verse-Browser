@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { auth, db } from '@/lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -39,6 +39,23 @@ export const formatUrl = (input) => {
 
 const initialIsIncognito = false;
 
+export const AVAILABLE_EXTENSIONS = [
+  {
+    id: "ext-color-picker",
+    name: "Color Auto-Picker",
+    description: "Click any pixel on the screen to instantly copy its exact HEX color code to your clipboard.",
+    icon: "🎨",
+    category: "Design",
+  },
+  {
+    id: "ext-pip",
+    name: "Picture-in-Picture",
+    description: "Pop out a video from a tab into a floating, resizable window that stays on top of your screen.",
+    icon: "🖼️",
+    category: "Media",
+  }
+];
+
 export const useBrowserStore = create(
   persist(
     (set, get) => ({
@@ -51,7 +68,7 @@ export const useBrowserStore = create(
   bookmarks: [],
   bookmarkBarVisibility: 'always', // 'always' or 'new-tab'
   showHomeButton: false, // Hidden by default like Chrome
-  installedExtensions: [],
+  installedExtensions: AVAILABLE_EXTENSIONS.map(ext => ({ ...ext, isEnabled: false, isPinned: false })),
   downloads: [],
   hiddenTopSites: [],
   downloadSettings: {
@@ -83,7 +100,6 @@ export const useBrowserStore = create(
     },
   ],
   activeTabId: '1',
-  
   // AI Sidebar State
   isAISidebarOpen: false,
   openRouterApiKey: '',
@@ -614,9 +630,11 @@ export const useBrowserStore = create(
   setDropdownOffset: (offset) => set({ dropdownOffset: offset }),
   setShowHomeButton: (show) => set({ showHomeButton: show }),
 
+
   removeMultipleTabs: (ids) => set((state) => {
     const idsToRemove = new Set(ids);
     let newTabs = state.tabs.filter(t => !idsToRemove.has(t.id));
+    
     if (newTabs.length === 0) {
       if (window.electron?.getWindowCount) {
         window.electron.getWindowCount().then(count => {
@@ -783,19 +801,7 @@ export const useBrowserStore = create(
     };
   }),
 
-  openExtensionStoreTab: () => set((state) => {
-    const existingTab = state.tabs.find(t => t.url === 'browser://store');
-    if (existingTab) return { activeTabId: existingTab.id };
-    const newId = Date.now().toString();
-    return {
-      tabs: [...state.tabs, { 
-        id: newId, title: 'Extension Store', url: 'browser://store', favicon: null,
-        isLoading: false, canGoBack: false, canGoForward: false, error: null,
-        fallbackForwardUrl: null, isPlayingAudio: false, isMuted: false, isPinned: false, zoomLevel: 0, findState: { isVisible: false, text: '', activeMatchOrdinal: 0, matches: 0 },
-      }],
-      activeTabId: newId,
-    };
-  }),
+
 
   openDownloadsTab: () => set((state) => {
     const existingTab = state.tabs.find(t => t.url === 'browser://downloads');
@@ -1075,38 +1081,17 @@ export const useBrowserStore = create(
   }),
 
   // Extension Actions
-  installExtension: (extension) => set((state) => {
-    if (state.installedExtensions.some(e => e.id === extension.id)) return state;
-    if (extension.id === 'ext-dark-mode' && window.electron) {
-      window.electron.tabManager.setForceDark(true);
-    }
-    if (extension.id === 'ext-ad-blocker' && window.electron?.tabManager?.shield) {
-      window.electron.tabManager.shield.setGlobal(true);
-    }
-    return { installedExtensions: [...state.installedExtensions, { ...extension, isEnabled: true }] };
-  }),
-  uninstallExtension: (id) => set((state) => {
-    if (id === 'ext-dark-mode' && window.electron) {
-      window.electron.tabManager.setForceDark(false);
-    }
-    if (id === 'ext-ad-blocker' && window.electron?.tabManager?.shield) {
-      window.electron.tabManager.shield.setGlobal(false);
-    }
+  toggleExtension: (id) => set((state) => {
     return {
-      installedExtensions: state.installedExtensions.filter(e => e.id !== id)
+      installedExtensions: (state.installedExtensions || []).map(e => 
+        e.id === id ? { ...e, isEnabled: !e.isEnabled } : e
+      )
     };
   }),
-  toggleExtension: (id) => set((state) => {
-    const ext = state.installedExtensions.find(e => e.id === id);
-    if (id === 'ext-dark-mode' && window.electron && ext) {
-      window.electron.tabManager.setForceDark(!ext.isEnabled);
-    }
-    if (id === 'ext-ad-blocker' && window.electron?.tabManager?.shield && ext) {
-      window.electron.tabManager.shield.setGlobal(!ext.isEnabled);
-    }
+  togglePinExtension: (id) => set((state) => {
     return {
-      installedExtensions: state.installedExtensions.map(e => 
-        e.id === id ? { ...e, isEnabled: !e.isEnabled } : e
+      installedExtensions: (state.installedExtensions || []).map(e => 
+        e.id === id ? { ...e, isPinned: !e.isPinned } : e
       )
     };
   }),
@@ -1161,6 +1146,21 @@ export const useBrowserStore = create(
     }),
     {
       name: 'browser-storage-' + currentProfileId,
+      merge: (persistedState, currentState) => {
+        const mergedExtensions = AVAILABLE_EXTENSIONS.map(availableExt => {
+          const persistedExt = (persistedState.installedExtensions || []).find(e => e.id === availableExt.id);
+          if (persistedExt) {
+            return { ...availableExt, isEnabled: persistedExt.isEnabled, isPinned: persistedExt.isPinned };
+          }
+          return { ...availableExt, isEnabled: false, isPinned: false };
+        });
+        
+        return {
+          ...currentState,
+          ...persistedState,
+          installedExtensions: mergedExtensions
+        };
+      },
       partialize: (state) => ({
         history: state.history,
         bookmarks: state.bookmarks,
@@ -1181,6 +1181,9 @@ export const useBrowserStore = create(
         theme: state.theme,
         customColors: state.customColors,
         ntpSettings: state.ntpSettings,
+        activeTabId: state.activeTabId,
+        splitTabId: state.splitTabId,
+        focusedPane: state.focusedPane,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }
@@ -1207,4 +1210,12 @@ if (typeof window !== 'undefined') {
       useBrowserStore.getState().syncFirebaseData();
     }
   });
+
+  // Sync Zustand state across windows/tabs (e.g. native popup changes)
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'browser-storage-' + currentProfileId) {
+      useBrowserStore.persist.rehydrate();
+    }
+  });
 }
+

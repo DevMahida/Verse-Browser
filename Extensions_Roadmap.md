@@ -1,4 +1,4 @@
-﻿# 🧩 Verse Browser - Extensions Implementation Roadmap
+# 🧩 Verse Browser - Extensions Implementation Roadmap
 
 This document categorizes all planned and candidate browser extensions for **Verse Browser** into 3 implementation difficulty levels based on technical complexity, required Electron APIs, state management, and security architecture.
 
@@ -9,10 +9,10 @@ This document categorizes all planned and candidate browser extensions for **Ver
 
 | Extension Name | Description | Key Technical Mechanism |
 | :--- | :--- | :--- |
-| **1. Color Auto-Picker & Eyedropper** | Click any pixel on the web screen to sample and copy HEX/RGB/HSL color codes. | Native `EyeDropper` web API or screen canvas sampling in Electron. |
+| **1. ~~Color Auto-Picker & Eyedropper~~ (Implemented)** | Click any pixel on the web screen to sample and copy HEX/RGB/HSL color codes. | Native `EyeDropper` web API or screen canvas sampling in Electron. |
 | **2. Universal Dark Mode** | Inverts bright web pages and applies custom dark styling across all domains. | Dynamic CSS injection via `webContents.insertCSS()` & media filter toggles. |
 | **3. Quick QR Code Generator** | Generates an instant QR code for the active page URL for quick mobile sharing. | React UI modal utilizing `qrcode.react` package. |
-| **4. Speed & Audio Booster Controller** | Boosts web audio volume up to 600% and adjusts video playback speed (0.25x – 4.0x). | DOM JS injection targeting `<video>` and `<audio>` Web Audio `GainNode`. |
+| **4. ~~Speed & Audio Booster Controller~~ (Implemented)** | Boosts web audio volume up to 600% and adjusts video playback speed (0.25x – 4.0x). | DOM JS injection targeting `<video>` and `<audio>` Web Audio `GainNode`. |
 | **5. Speed Reader & Bionic Reader** | Formats text with bionic bolding or clutter-free reader view for faster reading. | `@mozilla/readability` parsing with a custom overlay view. |
 | **6. Custom Typography Adjuster** | Customizes font family, size, line-height, and contrast per domain. | Domain-scoped CSS injection into `WebContentsView`. |
 | **7. JSON Formatter & API Inspector** | Automatically formats raw JSON responses with color coding, search, and collapsible nodes. | Content-type detection & injection of a syntax-highlighted React JSON tree view. |
@@ -26,7 +26,7 @@ This document categorizes all planned and candidate browser extensions for **Ver
 | Extension Name | Description | Key Technical Mechanism |
 | :--- | :--- | :--- |
 | **9. Verse Shield (Ad & Tracker Blocker)** | Intercepts and blocks ads, analytics trackers, and malvertising before loading. | `session.webRequest.onBeforeRequest` filtering with EasyList / uBlock rules. |
-| **10. Picture-in-Picture (PiP) Video Pop-out** | Detaches videos into a floating, pin-on-top, resizable frameless window. | HTML5 PiP API integration + Electron frameless `BrowserWindow` video player. |
+| **10. ~~Picture-in-Picture (PiP) Video Pop-out~~ (Implemented)** | Detaches videos into a floating, pin-on-top, resizable frameless window. | HTML5 PiP API integration + Electron frameless `BrowserWindow` video player. |
 | **11. Smart Web Clipper & Sidebar Notes** | Highlight text/images on any site and save them to a persistent note notebook. | Right-click DOM context menu selection -> IPC -> Firebase Firestore & Zustand. |
 | **12. AI Web Page Summarizer** | One-click instant AI summary and bullet points of long articles and web pages. | Page text extraction (`readability`) -> OpenRouter LLM -> AI Sidebar UI. |
 | **13. AI Writing & Grammar Assistant** | Floating toolbar to rewrite, fix grammar, expand, or translate selected input text. | DOM selection position detection + LLM completion API + DOM node text replacement. |

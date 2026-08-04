@@ -120,23 +120,25 @@ function attachCosmeticFilters(tabWebContents) {
       window.__verseYouTubeShield = true;
 
       const dismissAndUnblock = () => {
+        let didRemoveModal = false;
         try {
-          // 1. Remove YouTube's Anti-Adblock Enforcement modals and overlays safely
+          // 1. Remove YouTube's Anti-Adblock Enforcement modals and overlays
           document.querySelectorAll('ytd-enforcement-message-view-model, .ytp-error-screen').forEach(node => {
-            try { node.remove(); } catch (e) {}
+            try { node.remove(); didRemoveModal = true; } catch (e) {}
           });
 
           document.querySelectorAll('tp-yt-paper-dialog, #error-screen').forEach(node => {
             try {
               if (node.querySelector && node.querySelector('ytd-enforcement-message-view-model')) {
                 node.remove();
+                didRemoveModal = true;
               }
             } catch (e) {}
           });
 
-          // Restore body scrolling if enforcement popup locked it
-          if (document.body && document.body.style.overflow === 'hidden') {
-            document.body.style.overflow = 'auto';
+          // Only restore body scrolling if we actually removed a modal
+          if (didRemoveModal && document.body && document.body.style.overflow === 'hidden') {
+            document.body.style.overflow = '';
           }
 
           const player = document.querySelector('#movie_player');
@@ -155,27 +157,40 @@ function attachCosmeticFilters(tabWebContents) {
             }
           }
 
-          // 3. Auto-resume video if YouTube paused it due to anti-adblock detection
-          if (video && video.paused && !player?.classList.contains('ad-showing')) {
-            const playBtn = document.querySelector('.ytp-play-button');
-            if (playBtn && playBtn.getAttribute('aria-label')?.includes('Play')) {
-              video.play().catch(() => {});
-            }
+          // 3. Auto-resume ONLY if we just dismissed an enforcement modal
+          //    This prevents overriding the user's manual pause
+          if (didRemoveModal && video && video.paused && !player?.classList.contains('ad-showing')) {
+            video.play().catch(() => {});
           }
         } catch (err) {}
       };
 
+      // Debounce observer callbacks to avoid firing thousands of times
+      let _debounceTimer = null;
+      const debouncedDismiss = () => {
+        if (_debounceTimer) return;
+        _debounceTimer = setTimeout(() => {
+          _debounceTimer = null;
+          dismissAndUnblock();
+        }, 300);
+      };
+
+      // Run once on load
       dismissAndUnblock();
-      const observer = new MutationObserver(dismissAndUnblock);
-      if (document.documentElement || document.body) {
-        observer.observe(document.documentElement || document.body, {
+
+      // Scope observer narrowly — only watch for new child nodes being added
+      // to the main content area, not every class/style change on the whole page
+      const observeTarget = document.querySelector('ytd-app') || document.querySelector('#content') || document.body;
+      if (observeTarget) {
+        const observer = new MutationObserver(debouncedDismiss);
+        observer.observe(observeTarget, {
           childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'style', 'open']
+          subtree: true
         });
       }
-      setInterval(dismissAndUnblock, 150);
+
+      // Fallback interval — very infrequent, just a safety net
+      setInterval(dismissAndUnblock, 2000);
     })();`;
     tabWebContents.executeJavaScript(code).catch(() => {});
   });

@@ -67,10 +67,12 @@ contextBridge.exposeInMainWorld("electron", {
     updateBounds: (data) => ipcRenderer.send('tab-update-bounds', data),
     navigate: (data) => ipcRenderer.send('tab-navigate', data),
     action: (data) => ipcRenderer.send('tab-action', data),
-    executeJavaScript: (data) => ipcRenderer.invoke('tab-execute-javascript', data),
     capturePage: (tabId) => ipcRenderer.invoke('tab-capture-page', tabId),
+    focusTab: (tabId) => ipcRenderer.send('tab-focus', tabId),
     fetchSource: (data) => ipcRenderer.invoke('fetch-source', data),
-    setForceDark: (enabled) => ipcRenderer.send('set-force-dark', enabled),
+    openPopup: (data) => ipcRenderer.send('open-popup', data),
+    closePopup: () => ipcRenderer.send('close-popup'),
+    openNewTab: (data) => ipcRenderer.send('open-new-tab', data),
     onTabEvent: (callback) => {
       const handler = (_event, data) => callback(data);
       ipcRenderer.on('tab-event', handler);

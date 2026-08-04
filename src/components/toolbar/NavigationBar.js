@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen, Pipette, PictureInPicture2, Zap, Type, QrCode } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -14,12 +14,12 @@ import SiteSettingsPopup from "./SiteSettingsPopup";
 import VerseShieldPopup from "./VerseShieldPopup";
 import HistoryPopup from "./HistoryPopup";
 import DownloadsPopup from "./DownloadsPopup";
+import ExtensionsPopup from "./ExtensionsPopup";
 import BrowserMenu from "./BrowserMenu";
 import ProfileMenu from "./ProfileMenu";
 import ZoomPopup from "./ZoomPopup";
-
 export default function NavigationBar() {
-  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton } = useBrowserStore(
+  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton, installedExtensions, toggleExtension } = useBrowserStore(
     useShallow((state) => ({
       toggleAISidebar: state.toggleAISidebar,
       isAISidebarOpen: state.isAISidebarOpen,
@@ -48,6 +48,8 @@ export default function NavigationBar() {
       currentUser: state.currentUser,
       downloads: state.downloads,
       showHomeButton: state.showHomeButton,
+      installedExtensions: state.installedExtensions,
+      toggleExtension: state.toggleExtension,
     }))
   );
 
@@ -64,7 +66,10 @@ export default function NavigationBar() {
   const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showZoomPopup, setShowZoomPopup] = useState(false);
+  const [showExtensionsPopup, setShowExtensionsPopup] = useState(false);
   const [downloadAnimate, setDownloadAnimate] = useState(false);
+  const [copiedColor, setCopiedColor] = useState(null);
+  const [pipMessage, setPipMessage] = useState(null);
   const [downloadJustFinished, setDownloadJustFinished] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [currentProfileId, setCurrentProfileId] = useState(() => {
@@ -83,6 +88,7 @@ export default function NavigationBar() {
   const profileRef = useRef(null);
   const zoomRef = useRef(null);
   const shieldRef = useRef(null);
+  const extensionsRef = useRef(null);
 
   useEffect(() => {
     if (window.electron && window.electron.getProfiles) {
@@ -113,6 +119,9 @@ export default function NavigationBar() {
       if (shieldRef.current && !shieldRef.current.contains(e.target)) {
         setShowShieldPopup(false);
       }
+      if (extensionsRef.current && !extensionsRef.current.contains(e.target)) {
+        setShowExtensionsPopup(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -126,10 +135,11 @@ export default function NavigationBar() {
     else if (showShieldPopup) offset = 380;
     else if (showProfileMenu) offset = 500;
     else if (showZoomPopup) offset = 200;
+    else if (showExtensionsPopup) offset = 300;
     else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
 
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, isFocused, suggestions.length, setDropdownOffset]);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, showExtensionsPopup, isFocused, suggestions.length, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;
@@ -160,6 +170,61 @@ export default function NavigationBar() {
 
   const hasActiveDownloads = (downloads || []).some(d => d.state === 'progressing');
   const showDownloadBtn = hasActiveDownloads || downloadJustFinished || showDownloadsPopup;
+
+  const isColorPickerEnabled = installedExtensions?.some(e => e.id === 'ext-color-picker' && e.isEnabled);
+
+  const handleColorPicker = async () => {
+    if (!window.EyeDropper) {
+      alert("Your system does not support the EyeDropper API");
+      return;
+    }
+    try {
+      const eyeDropper = new window.EyeDropper();
+      const result = await eyeDropper.open();
+      await navigator.clipboard.writeText(result.sRGBHex);
+      setCopiedColor(result.sRGBHex);
+      setTimeout(() => setCopiedColor(null), 2000);
+    } catch (e) {
+      console.log("EyeDropper cancelled or failed:", e);
+    }
+  };
+
+  const handlePiP = async () => {
+    if (!activePaneTabId || activePaneTabId.includes('browser://')) return;
+    const code = `
+      (async () => {
+        try {
+          if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+            return "EXITED";
+          }
+          const video = document.querySelector('video');
+          if (!video) {
+            return "NO_VIDEO";
+          }
+          await video.requestPictureInPicture();
+          return "SUCCESS";
+        } catch(e) {
+          console.error('PiP Error:', e);
+          return "ERROR";
+        }
+      })();
+    `;
+    try {
+      const result = await window.electron.tabManager.executeJavaScript({ tabId: activePaneTabId, code });
+      if (result === "NO_VIDEO") {
+        setPipMessage("No video found on page");
+      } else if (result === "ERROR") {
+        setPipMessage("Failed to enter PiP. Is video playing?");
+      } else {
+        return; // SUCCESS or EXITED
+      }
+      setTimeout(() => setPipMessage(null), 3000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
   // --- Verse Shield: listen for live blocked-count updates ---
   useEffect(() => {
@@ -289,6 +354,7 @@ export default function NavigationBar() {
     : 0;
 
   return (
+    <>
     <div className="h-12 bg-surface border-b border-border flex items-center px-4 space-x-4 select-none">
       {/* Navigation Controls */}
       <div className="flex items-center space-x-1 text-foreground/70 relative">
@@ -522,14 +588,93 @@ export default function NavigationBar() {
             {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
           </div>
         )}
-        <button
-          disabled
-          aria-label="Extensions"
-          className="p-2 rounded-full transition-colors hidden lg:flex min-w-10 min-h-10 items-center justify-center focus-visible:ring-2 focus-visible:outline-none opacity-50 cursor-not-allowed"
-          title="Extensions (Coming Soon)"
-        >
-          <Puzzle size={18} />
-        </button>
+        
+        {/* Render pinned extensions (only enabled + pinned) */}
+        {installedExtensions?.filter(e => e.isPinned && e.isEnabled).map(ext => {
+          if (ext.id === 'ext-color-picker') {
+            return (
+              <div key={ext.id} className="relative flex items-center justify-center">
+                <button
+                  onClick={handleColorPicker}
+                  aria-label="Color Picker"
+                  className="p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none text-blue-500"
+                  title="Color Auto-Picker"
+                >
+                  <Pipette size={18} />
+                </button>
+                {copiedColor && (
+                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-surface text-foreground border border-border px-3 py-1.5 rounded shadow-lg text-xs font-medium whitespace-nowrap z-50 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                    <div className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: copiedColor }}></div>
+                    {copiedColor} copied!
+                  </div>
+                )}
+              </div>
+            );
+          }
+          if (ext.id === 'ext-pip') {
+            return (
+              <div key={ext.id} className="relative flex items-center justify-center">
+                <button
+                  onClick={handlePiP}
+                  aria-label="Picture-in-Picture"
+                  className="p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
+                  title="Picture-in-Picture Video Pop-out"
+                >
+                  <PictureInPicture2 size={18} />
+                </button>
+                {pipMessage && (
+                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-3 py-1.5 rounded shadow-lg text-xs font-medium whitespace-nowrap z-50 animate-in fade-in slide-in-from-top-1">
+                    {pipMessage}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          if (ext.id === 'ext-verse-shield') {
+            return null; // Shield has its own dedicated toolbar icon
+          }
+          return null; // Other extensions don't have toolbar actions yet
+        })}
+
+        <div className="relative flex items-center justify-center" ref={extensionsRef}>
+          <button
+            onClick={(e) => {
+              if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const popupWidth = 340;
+                const extCount = (installedExtensions || []).length;
+                const popupHeight = Math.min(520, 120 + extCount * 52);
+                const x = Math.round(window.screenX + rect.right - popupWidth);
+                const y = Math.round(window.screenY + rect.bottom + 8);
+                
+                const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                const popupUrl = `${baseUrl}/popup?type=extensions&profileId=${currentProfileId}`;
+
+                window.electron.tabManager.openPopup({
+                  url: popupUrl,
+                  width: popupWidth,
+                  height: popupHeight,
+                  x,
+                  y
+                });
+              } else {
+                setShowExtensionsPopup(!showExtensionsPopup);
+              }
+            }}
+            aria-label="Extensions"
+            aria-haspopup="dialog"
+            aria-expanded={showExtensionsPopup}
+            className={clsx(
+              "p-2 rounded-full transition-colors hidden lg:flex min-w-10 min-h-10 items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+              showExtensionsPopup ? "bg-foreground/10 text-foreground" : "hover:bg-foreground/10 hover:text-foreground"
+            )}
+            title="Extensions"
+          >
+            <Puzzle size={18} />
+          </button>
+          {showExtensionsPopup && <ExtensionsPopup onClose={() => setShowExtensionsPopup(false)} />}
+        </div>
 
         {/* User Account / Incognito */}
         <div className="relative flex items-center pl-1" ref={profileRef}>
@@ -599,5 +744,6 @@ export default function NavigationBar() {
         <BrowserMenu />
       </div>
     </div>
+    </>
   );
 }

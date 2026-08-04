@@ -77,14 +77,6 @@ export default function BrowserLayout() {
       });
     }
 
-    // Hydrate extension states
-    if (window.electron && window.electron.tabManager) {
-      const exts = useBrowserStore.getState().installedExtensions || [];
-      const darkExt = exts.find(e => e.id === 'ext-dark-mode');
-      if (darkExt && darkExt.isEnabled) {
-        window.electron.tabManager.setForceDark(true);
-      }
-    }
   }, []);
 
   useEffect(() => {
@@ -494,6 +486,19 @@ export default function BrowserLayout() {
     window.electron.onDownloadDone((data) => {
       useBrowserStore.getState().updateDownload(data.id, data);
     });
+
+    if (window.electron?.tabManager?.onTabEvent) {
+      const cleanup = window.electron.tabManager.onTabEvent((data) => {
+        if (data && data.action === 'open-tab') {
+          if (data.url === 'browser://extensions') {
+            useBrowserStore.getState().openExtensionsTab();
+          } else if (data.url) {
+            useBrowserStore.getState().addTab(data.url);
+          }
+        }
+      });
+      return cleanup;
+    }
   }, []);
 
   return (

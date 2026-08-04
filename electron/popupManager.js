@@ -1,0 +1,78 @@
+const { BrowserWindow } = require('electron');
+const path = require('path');
+
+/**
+ * Dedicated Native Popup Manager Module for Verse Browser.
+ * Handles Chrome-style floating popover windows attached directly to parent BrowserWindow.
+ * Floats on top of WebContentsView with full drop-shadows and glassmorphism, with ZERO webview shifting.
+ */
+
+let activePopupWindow = null;
+
+/**
+ * Opens a native Chrome-style popover window attached to parentWin.
+ *
+ * @param {Object} options
+ * @param {import('electron').BrowserWindow} options.parentWin - The main BrowserWindow
+ * @param {string} options.url - URL to load (e.g. http://localhost:3000/popup?type=media-booster)
+ * @param {number} options.width - Popup width
+ * @param {number} options.height - Popup height
+ * @param {number} options.x - Calculated screen X coordinate
+ * @param {number} options.y - Calculated screen Y coordinate
+ * @param {string} [options.partition] - The partition to use for the popup window
+ */
+function showPopupWindow({ parentWin, url, width = 360, height = 380, x, y, partition }) {
+  closePopupWindow();
+
+  if (!parentWin || parentWin.isDestroyed()) return;
+
+  activePopupWindow = new BrowserWindow({
+    parent: parentWin,
+    width: Math.round(width),
+    height: Math.round(height),
+    x: Math.round(x),
+    y: Math.round(y),
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      ...(partition ? { partition } : {})
+    }
+  });
+
+  activePopupWindow.loadURL(url);
+
+  activePopupWindow.once('ready-to-show', () => {
+    if (activePopupWindow && !activePopupWindow.isDestroyed()) {
+      activePopupWindow.show();
+    }
+  });
+
+  activePopupWindow.on('blur', () => {
+    // Automatically close popover when user clicks outside
+    closePopupWindow();
+  });
+}
+
+/**
+ * Closes any active floating popup window.
+ */
+function closePopupWindow() {
+  if (activePopupWindow && !activePopupWindow.isDestroyed()) {
+    try {
+      activePopupWindow.close();
+    } catch (e) {}
+  }
+  activePopupWindow = null;
+}
+
+module.exports = {
+  showPopupWindow,
+  closePopupWindow
+};

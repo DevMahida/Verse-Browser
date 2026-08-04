@@ -1,84 +1,1599 @@
-=================================================
-          VERSE BROWSER - PROJECT REPORT
-=================================================
+================================================================================
+                         VERSE BROWSER — PROJECT REPORT
+================================================================================
 
-1. PROJECT OVERVIEW
--------------------------------------------------
-Project Name: Verse Browser
-Description: A next-generation, AI-powered desktop web browser built on modern web technologies. It combines traditional web browsing capabilities with an embedded AI Sidebar, "Deep Research" capabilities, robust split-pane viewing, and cross-device Firebase syncing. 
+  Project Name    :  Verse Browser
+  Application ID  :  com.verse.browser
+  Version         :  0.1.0
+  Platform        :  Desktop (Windows, macOS, Linux)
+  Category        :  AI-Powered Web Browser
+  License         :  MIT License
 
-2. TECHNOLOGY STACK
--------------------------------------------------
-- Desktop Runtime: Electron
-- Frontend Framework: Next.js 16 (React 19, Static Export via Turbopack)
-- Styling: Tailwind CSS v4
-- State Management: Zustand (with persistence)
-- Database & Auth: Firebase (Firestore & Google Auth)
-- Drag and Drop: dnd-kit
-- AI Integrations: OpenRouter API (Multi-model support) & Tavily (Deep research)
+================================================================================
+                           TABLE OF CONTENTS
+================================================================================
 
-3. ARCHITECTURE
--------------------------------------------------
-The application follows a hybrid architecture, splitting responsibilities between a Node.js main process and a React frontend:
+  1.  Introduction
+  2.  Problem Statement & Motivation
+  3.  Objectives
+  4.  Technology Stack
+  5.  System Requirements
+  6.  System Architecture
+  7.  Project Structure & File Organization
+  8.  Module-Wise Description
+      8.1  Electron Main Process
+      8.2  Tab Management System
+      8.3  Profile Manager
+      8.4  Verse Shield (Ad & Tracker Blocker)
+      8.5  Google Authentication (OAuth 2.0)
+      8.6  Context Menu System
+      8.7  Window Bounds Manager
+      8.8  Preload Scripts & IPC Bridge
+      8.9  System Auth Handoff
+  9.  Frontend Architecture
+      9.1  Layout & Routing
+      9.2  Zustand State Management
+      9.3  Component Hierarchy
+  10. Feature Catalogue
+      10.1  Core Browsing
+      10.2  Advanced Tab Management
+      10.3  Window Management & Proximity Features
+      10.4  Privacy & Security
+      10.5  Cloud Syncing (Firebase)
+      10.6  History & Bookmarks
+      10.7  Downloads Management
+      10.8  Built-in AI Assistant
+      10.9  Deep Research Mode
+      10.10 Reading Mode
+      10.11 Customization & Theming
+      10.12 Keyboard Shortcuts
+      10.13 Accessibility (ARIA)
+      10.14 Document Export
+      10.15 Safety Check
+      10.16 Extensions Store (Preview)
+  11. Design System & UI/UX
+  12. Security Architecture
+  13. Inter-Process Communication (IPC) Catalogue
+  14. Third-Party Dependencies
+  15. Environment Variables & Configuration
+  16. Build & Distribution
+  17. Codebase Statistics
+  18. Future Scope & Roadmap
+  19. Conclusion
 
-- Main Process (/electron/): Handles IPC (Inter-Process Communication), window creation, native OS-level interactions, profile management, and driving the Chromium WebContentsViews.
-- Frontend Renderer (/src/): The Next.js application that renders the user interface (omnibox, sidebar, settings, etc.) using React.
+================================================================================
+  1. INTRODUCTION
+================================================================================
 
-4. FILE & FOLDER STRUCTURE
--------------------------------------------------
-/electron/ (Desktop Runtime / Backend)
-  ├── main.js                  # Primary entry point. Handles app lifecycle, main windows, IPC setup
-  ├── tabManager.js            # Manages Chromium WebContentsView for tabs and split-pane logic
-  ├── preload.js               # Secure IPC bridge connecting Node.js with React (window.electron)
-  ├── auth-preload.js          # Specialized preload for Google Auth window
-  ├── tab-preload.js           # Specialized preload injected into web pages
-  ├── googleAuth.js            # Native Google Sign-in flow handling
-  ├── system-auth-handoff.js   # Passes auth tokens from desktop OS to React frontend
-  ├── profileManager.js        # Manages isolated browsing profiles (Incognito, Multi-account)
-  ├── contextMenu.js           # Generates native OS right-click context menus
-  ├── windowBounds.js          # Persists window size/position across restarts
-  └── view-source.html         # Template for rendering view-source:// pages
+  Verse Browser is a fully functional, next-generation desktop web browser
+  built from the ground up using modern web technologies. It combines the
+  power of the Chromium rendering engine (via Electron) with a rich,
+  React-based user interface (via Next.js) to deliver a browsing experience
+  that natively integrates artificial intelligence, cross-device
+  synchronization, advanced privacy controls, and a beautiful glassmorphic
+  design language.
 
-/src/ (Frontend UI / React & Next.js)
-  ├── app/                     # Next.js Routing
-  │   ├── layout.js            # Root layout with global providers/fonts
-  │   ├── page.js              # Main browser window entry component
-  │   └── globals.css          # Tailwind CSS and global styling
-  ├── components/              # Modular UI Components
-  │   ├── ai/                  # AI Sidebar interface (AISidebar.js)
-  │   ├── browser/             # Internal pages (Settings, History, Downloads, Extensions)
-  │   │                        # WebviewContainer.js maps React UI to Electron views
-  │   ├── common/              # Reusable UI like SuggestionsDropdown.js
-  │   ├── homepage/            # New Tab page (Hero, TopSites, RecentTabs)
-  │   ├── layout/              # Main BrowserLayout.js skeleton
-  │   ├── modals/              # Global popups (ClearData, CustomizeTheme)
-  │   ├── toolbar/             # Omnibox (NavigationBar.js), Tab strip (TopBar.js), Menus
-  │   └── ui/                  # Shared micro-components (ResizeHandle.js)
-  ├── store/                   # State Management
-  │   └── useBrowserStore.js   # Massive Zustand store handling tabs, history, and syncing
-  ├── hooks/                   # Custom React hooks (useResizableWidth, useSearchSuggestions)
-  └── lib/                     # Utilities
-      └── firebase.js          # Firebase SDK initialization
+  Unlike traditional browsers that treat AI as an afterthought or bolt-on
+  extension, Verse embeds a conversational AI assistant directly into the
+  browsing workflow. Users can summarize pages, ask questions about content,
+  generate social media posts, translate text, extract data, and even
+  conduct autonomous multi-source "Deep Research" — all without leaving the
+  browser window.
 
-5. KEY FEATURES (IMPLEMENTED)
--------------------------------------------------
-- Core: Fast Chromium rendering, Omnibox navigation, Find in Page, Page Zooming.
-- Advanced Tabs: Drag-and-drop, tab pinning, and Split View (native side-by-side tabs in one window).
-- Window Proximity: Dragging a tab creates a new window, dragging windows near each other merges them.
-- Privacy & Security: True Incognito mode, site permissions manager, and XposedOrNot safety checks.
-- Cloud Sync: Multi-device sync of bookmarks, history, and AI chats via Firebase.
-- AI Assistant: Built-in context-aware AI Sidebar with deep research capabilities.
+  The project demonstrates the feasibility of building a production-grade
+  desktop browser application entirely with JavaScript/Node.js technologies,
+  while maintaining feature parity with major browsers in areas such as tab
+  management, downloads, permissions, theming, and multi-profile support.
 
-6. ROADMAP & PENDING FEATURES
--------------------------------------------------
-- High Difficulty: Full WebExtensions API support (installing actual .crx extensions), Native live translation, Active Safe Browsing API integration, Live Captions.
-- Medium Difficulty: Password manager & Form autofill, Memory/Energy saver modes (sleeping tabs), Tab Groups.
-- UI Enhancements: Native Cast support.
+================================================================================
+  2. PROBLEM STATEMENT & MOTIVATION
+================================================================================
 
-7. RECENT RESOLUTIONS
--------------------------------------------------
-- Fixed custom background image persistence via Base64.
-- Fixed cross-profile tab merging issues.
-- Fixed window drag resizing bug on fractional scaling displays.
-- Added comprehensive ARIA screen-reader support.
-=================================================
+  Modern web browsers have become the primary interface through which users
+  interact with information, yet they remain fundamentally passive tools.
+  Users must manually navigate, copy content, open separate AI tools, and
+  switch between applications to accomplish tasks that could be streamlined
+  within the browser itself.
+
+  Key problems addressed:
+
+  •  Fragmented AI Workflow: Users must switch between browser tabs and
+     external AI tools (ChatGPT, Gemini, etc.) to get assistance with the
+     content they're viewing. This context-switching is inefficient.
+
+  •  No Native Research Capabilities: Conducting deep research requires
+     manually opening dozens of tabs, reading articles, and synthesizing
+     information. No mainstream browser automates this.
+
+  •  Limited Cross-Device Continuity: While Chrome Sync exists, it is
+     tightly coupled to Google's ecosystem. Independent browsers lack
+     seamless, real-time sync for bookmarks, history, and AI conversations.
+
+  •  Privacy Concerns: Many users want built-in ad/tracker blocking without
+     relying on third-party extensions that may themselves collect data.
+
+  •  Lack of Customization: Modern browsers offer limited theming beyond
+     basic color changes. Users desire glassmorphic, visually rich interfaces
+     with customizable new-tab pages.
+
+  Verse Browser was conceived to solve all of these problems in a single,
+  cohesive application.
+
+================================================================================
+  3. OBJECTIVES
+================================================================================
+
+  •  Build a fully functional desktop web browser with Chromium rendering.
+  •  Embed a multi-model AI assistant directly into the browsing workflow.
+  •  Implement autonomous "Deep Research" with web search and report
+     generation.
+  •  Provide seamless cross-device synchronization via Firebase.
+  •  Deliver built-in ad/tracker blocking (Verse Shield) without extensions.
+  •  Support multi-profile and true incognito mode with session isolation.
+  •  Implement advanced tab management: split view, drag-and-drop, tab
+     tear-off, and window-proximity merge.
+  •  Create a modern, accessible, glassmorphic UI with dark/light theming.
+  •  Ensure full ARIA screen-reader accessibility across the custom UI.
+  •  Support document export (PDF/DOCX) for AI-generated research reports.
+  •  Implement comprehensive keyboard shortcuts matching Chrome conventions.
+
+================================================================================
+  4. TECHNOLOGY STACK
+================================================================================
+
+  ┌──────────────────────┬──────────────────────────────────────────────────┐
+  │ Category             │ Technology / Version                             │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Desktop Runtime      │ Electron v43.0.0                                 │
+  │ Rendering Engine     │ Chromium (bundled with Electron)                  │
+  │ Frontend Framework   │ Next.js 16.2.10 (Static Export via Turbopack)     │
+  │ UI Library           │ React 19.2.4 / React DOM 19.2.4                  │
+  │ CSS Framework        │ Tailwind CSS v4 + @tailwindcss/typography         │
+  │ State Management     │ Zustand 5.0.14 (with persist middleware)          │
+  │ Typography/Fonts     │ Geist Sans / Geist Mono (Google Fonts)            │
+  │ Database & Auth      │ Firebase 12.15.0 (Firestore + Google Auth)        │
+  │ OAuth                │ Google OAuth 2.0 (RFC 8252 Loopback)              │
+  │ OAuth Library        │ google-auth-library 10.9.0                        │
+  │ AI Integration       │ OpenRouter API (multi-model gateway)              │
+  │ AI Research          │ Tavily API (web search + extract)                 │
+  │ Ad/Tracker Blocking  │ @ghostery/adblocker-electron 2.18.1               │
+  │ Drag-and-Drop        │ @dnd-kit/core 6.3.1 / @dnd-kit/sortable 10.0.0   │
+  │ Markdown Rendering   │ react-markdown 10.1.0 / marked 18.0.6            │
+  │ Reading Mode         │ @mozilla/readability 0.6.0                        │
+  │ Icons                │ Lucide React 1.23.0 / React Icons 5.7.0           │
+  │ HTTP Client          │ Axios 1.18.1 / cross-fetch 4.1.0                  │
+  │ QR Code Generation   │ qrcode.react 4.2.0                               │
+  │ Schema Validation    │ Zod 4.4.3                                         │
+  │ Document Export      │ html-to-docx 1.8.0                                │
+  │ CSS Utilities        │ clsx 2.1.1                                        │
+  │ Environment Vars     │ dotenv 17.4.2                                     │
+  │ PostCSS              │ @tailwindcss/postcss v4                           │
+  │ Linting              │ ESLint 9 + eslint-config-next 16.2.10             │
+  │ Formatting           │ Prettier 3.9.4 + prettier-plugin-tailwindcss 0.8  │
+  │ Build & Package      │ electron-builder 26.15.3                          │
+  │ Dev Tooling          │ concurrently 10.0.3 / wait-on 9.0.10              │
+  │ Cross-Env            │ cross-env 10.1.0                                  │
+  │ Module System        │ CommonJS (Electron) / ES Modules (Next.js)        │
+  │ Package Manager      │ npm                                               │
+  │ Version Control      │ Git                                               │
+  └──────────────────────┴──────────────────────────────────────────────────┘
+
+================================================================================
+  5. SYSTEM REQUIREMENTS
+================================================================================
+
+  Minimum Requirements:
+  •  Operating System    : Windows 10+, macOS 10.15+, or Linux (Ubuntu 18+)
+  •  Node.js             : v18 or higher
+  •  npm / yarn / pnpm   : Latest stable version
+  •  RAM                 : 4 GB minimum (8 GB recommended)
+  •  Disk Space          : ~500 MB for application + dependencies
+
+  Network Requirements:
+  •  Internet connection required for:
+     - AI features (OpenRouter API, Tavily API)
+     - Firebase cloud sync
+     - Google OAuth authentication
+     - Ad blocker filter list updates
+     - Safety check (XposedOrNot API)
+
+================================================================================
+  6. SYSTEM ARCHITECTURE
+================================================================================
+
+  Verse Browser follows a multi-process architecture inherent to Electron:
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                        VERSE BROWSER ARCHITECTURE                      │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │                                                                         │
+  │   ┌───────────────────────────────────────────────────────────────┐     │
+  │   │                    ELECTRON MAIN PROCESS                       │     │
+  │   │  (Node.js Runtime — Full OS Access)                            │     │
+  │   │                                                                 │     │
+  │   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │     │
+  │   │  │   main.js     │  │ tabManager   │  │ profileManager   │     │     │
+  │   │  │ (Entry Point) │  │   .js        │  │     .js          │     │     │
+  │   │  └──────────────┘  └──────────────┘  └──────────────────┘     │     │
+  │   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │     │
+  │   │  │ verseShield  │  │ contextMenu  │  │  windowBounds    │     │     │
+  │   │  │    .js       │  │    .js       │  │      .js         │     │     │
+  │   │  └──────────────┘  └──────────────┘  └──────────────────┘     │     │
+  │   │  ┌──────────────┐  ┌──────────────┐                           │     │
+  │   │  │ googleAuth   │  │ system-auth  │                           │     │
+  │   │  │    .js       │  │ -handoff.js  │                           │     │
+  │   │  └──────────────┘  └──────────────┘                           │     │
+  │   └───────────────────────────────────────────────────────────────┘     │
+  │         │                                                               │
+  │         │  IPC (ipcMain ↔ ipcRenderer via contextBridge)                │
+  │         │                                                               │
+  │   ┌───────────────────────────────────────────────────────────────┐     │
+  │   │                   ELECTRON RENDERER PROCESS                    │     │
+  │   │  (Chromium Sandbox — No Direct OS Access)                      │     │
+  │   │                                                                 │     │
+  │   │  ┌──────────────────────────────────────────────────────┐      │     │
+  │   │  │              NEXT.JS 16 APPLICATION                   │      │     │
+  │   │  │  (React 19 + Zustand + Tailwind CSS v4)               │      │     │
+  │   │  │                                                        │      │     │
+  │   │  │  ┌─────────────────────────────────────────────┐      │      │     │
+  │   │  │  │         BrowserLayout (Shell)                │      │      │     │
+  │   │  │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  │      │      │     │
+  │   │  │  │  │ TopBar   │  │ Toolbar  │  │ Sidebar  │  │      │      │     │
+  │   │  │  │  │ (Tabs)   │  │ (NavBar) │  │ (AI)     │  │      │      │     │
+  │   │  │  │  └──────────┘  └──────────┘  └──────────┘  │      │      │     │
+  │   │  │  │  ┌──────────────────────────────────────┐   │      │      │     │
+  │   │  │  │  │    WebviewContainer / Homepage        │   │      │      │     │
+  │   │  │  │  │    (Content Area)                     │   │      │      │     │
+  │   │  │  │  └──────────────────────────────────────┘   │      │      │     │
+  │   │  │  └─────────────────────────────────────────────┘      │      │     │
+  │   │  └──────────────────────────────────────────────────────┘      │     │
+  │   └───────────────────────────────────────────────────────────────┘     │
+  │         │                                                               │
+  │   ┌───────────────────────────────────────────────────────────────┐     │
+  │   │              WEBCONTENTSVIEW PROCESSES (Per Tab)                │     │
+  │   │  (Isolated Chromium renderer for each browsed webpage)         │     │
+  │   │  Each tab runs in its own WebContentsView with:                │     │
+  │   │  • Isolated session partition (per profile / incognito)        │     │
+  │   │  • Context isolation enabled                                   │     │
+  │   │  • Node integration disabled                                   │     │
+  │   │  • Verse Shield ad blocking active                             │     │
+  │   │  • Custom tab-preload.js                                       │     │
+  │   └───────────────────────────────────────────────────────────────┘     │
+  │                                                                         │
+  │   ┌───────────────────────────────────────────────────────────────┐     │
+  │   │                    EXTERNAL SERVICES                           │     │
+  │   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │     │
+  │   │  │  Firebase     │  │  OpenRouter  │  │  Tavily API      │     │     │
+  │   │  │  Firestore    │  │  API         │  │  (Web Search)    │     │     │
+  │   │  │  + Auth       │  │  (AI Models) │  │                  │     │     │
+  │   │  └──────────────┘  └──────────────┘  └──────────────────┘     │     │
+  │   │  ┌──────────────┐  ┌──────────────────────────────────────┐   │     │
+  │   │  │ XposedOrNot  │  │  Google OAuth 2.0 (Loopback Server) │   │     │
+  │   │  │ (Breaches)   │  │                                      │   │     │
+  │   │  └──────────────┘  └──────────────────────────────────────┘   │     │
+  │   └───────────────────────────────────────────────────────────────┘     │
+  │                                                                         │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  Key Architectural Decisions:
+
+  •  WebContentsView over WebView: Each browser tab uses Electron's modern
+     WebContentsView API (not the deprecated <webview> tag). This provides
+     better security, performance, and direct access to Chromium's
+     webContents API for navigation, zoom, find-in-page, and DevTools.
+
+  •  Static Export: The Next.js frontend is compiled as a static HTML/JS
+     export (`output: 'export'`). In production, Electron loads the
+     pre-built static files directly; in development, it connects to the
+     Next.js dev server on localhost:3000.
+
+  •  Frameless Window: The application uses a frameless BrowserWindow
+     (`frame: false`) with custom title bar, window controls, and drag
+     regions implemented entirely in React. This enables the seamless
+     tab-bar-as-title-bar UX seen in modern browsers.
+
+  •  Partition-Based Isolation: Each user profile gets its own Electron
+     session partition (`persist:<profileId>`), ensuring cookies, cache,
+     and storage are isolated. Incognito mode uses an in-memory partition
+     that is destroyed when the window closes.
+
+================================================================================
+  7. PROJECT STRUCTURE & FILE ORGANIZATION
+================================================================================
+
+  Verse-Browser/
+  │
+  ├── electron/                          # ELECTRON MAIN PROCESS
+  │   ├── main.js                        # Application entry point (1094 lines)
+  │   │                                  # Window creation, IPC handlers, AI backend,
+  │   │                                  # downloads, permissions, theme, safety check
+  │   ├── tabManager.js                  # WebContentsView tab lifecycle (432 lines)
+  │   │                                  # Create, destroy, navigate, bounds, events
+  │   ├── profileManager.js             # Multi-profile management (246 lines)
+  │   │                                  # CRUD operations, Google linking, Tavily keys
+  │   ├── verseShield.js                 # Ad/tracker blocker engine (196 lines)
+  │   │                                  # Ghostery engine, per-site overrides, YouTube
+  │   ├── contextMenu.js                 # Right-click context menus (248 lines)
+  │   │                                  # Link, image, video, audio, editable, page
+  │   ├── googleAuth.js                  # OAuth 2.0 loopback flow (169 lines)
+  │   │                                  # PKCE, token exchange, encryption
+  │   ├── windowBounds.js                # Window state persistence (73 lines)
+  │   │                                  # Save/restore position, multi-monitor aware
+  │   ├── system-auth-handoff.js         # System browser auth redirect (129 lines)
+  │   │                                  # Zod validation, temporary HTTP server
+  │   ├── preload.js                     # Main preload script (175 lines)
+  │   │                                  # contextBridge API, anti-detection spoofing
+  │   ├── tab-preload.js                 # Tab-specific preload (per webview)
+  │   ├── auth-preload.js                # Auth window preload
+  │   └── view-source.html               # Custom view-source page renderer
+  │
+  ├── src/                               # NEXT.JS FRONTEND SOURCE
+  │   ├── app/                           # Next.js App Router
+  │   │   ├── layout.js                  # Root layout (Geist fonts, globals.css)
+  │   │   ├── page.js                    # Entry page (BrowserLayout + Homepage)
+  │   │   ├── globals.css                # CSS variables, Tailwind, scrollbars, drag
+  │   │   └── favicon.ico                # Application favicon
+  │   │
+  │   ├── components/                    # React Components (8 subdirectories)
+  │   │   ├── ai/
+  │   │   │   └── AISidebar.js           # AI chat sidebar (69,918 bytes)
+  │   │   │                              # Multi-model, chat sessions, deep research,
+  │   │   │                              # page context, export, streaming
+  │   │   │
+  │   │   ├── browser/                   # Internal browser pages
+  │   │   │   ├── WebviewContainer.js    # Tab content viewport manager
+  │   │   │   ├── SettingsPage.js        # Browser settings panel
+  │   │   │   ├── HistoryPage.js         # Browsing history viewer
+  │   │   │   ├── BookmarksPage.js       # Bookmarks manager
+  │   │   │   ├── DownloadsPage.js       # Downloads history & manager
+  │   │   │   ├── ReadingListPage.js     # Saved reading list
+  │   │   │   ├── ReaderPage.js          # Reading mode (Readability)
+  │   │   │   ├── ExtensionsPage.js      # Installed extensions viewer
+  │   │   │   ├── ExtensionStorePage.js  # Extension marketplace (preview)
+  │   │   │   └── SafetyCheckSection.js  # Email breach & version check
+  │   │   │
+  │   │   ├── common/
+  │   │   │   └── SuggestionsDropdown.js # Omnibox search suggestions
+  │   │   │
+  │   │   ├── homepage/                  # New Tab page components
+  │   │   │   ├── Homepage.js            # New Tab page layout
+  │   │   │   ├── HeroSection.js         # Search bar + greeting
+  │   │   │   ├── TopSites.js            # Frequently visited sites grid
+  │   │   │   ├── RecentTabs.js          # Recently closed tabs
+  │   │   │   └── LiveNews.js            # Live news feed widget
+  │   │   │
+  │   │   ├── layout/
+  │   │   │   └── BrowserLayout.js       # Main application shell (18,260 bytes)
+  │   │   │                              # Orchestrates toolbar, sidebar, content area
+  │   │   │
+  │   │   ├── modals/
+  │   │   │   ├── ClearDataModal.js      # Clear browsing data confirmation
+  │   │   │   └── CustomizeThemeModal.js # Theme customization (background images)
+  │   │   │
+  │   │   ├── toolbar/                   # Browser toolbar components
+  │   │   │   ├── TopBar.js              # Tab bar + window controls (25,317 bytes)
+  │   │   │   ├── NavigationBar.js       # URL bar + nav buttons (26,207 bytes)
+  │   │   │   ├── BrowserMenu.js         # Three-dot menu (18,692 bytes)
+  │   │   │   ├── ProfileMenu.js         # Profile switcher + Google auth
+  │   │   │   ├── VerseShieldPopup.js    # Shield stats + per-site controls
+  │   │   │   ├── BookmarkBar.js         # Bookmarks toolbar
+  │   │   │   ├── FindBar.js             # Find-in-page bar
+  │   │   │   ├── TabContextMenu.js      # Tab right-click menu
+  │   │   │   ├── HistoryPopup.js        # Quick history dropdown
+  │   │   │   ├── DownloadsPopup.js      # Downloads quick-view
+  │   │   │   ├── SiteSettingsPopup.js   # Per-site settings popup
+  │   │   │   ├── PermissionPrompt.js    # Permission request dialog
+  │   │   │   └── ZoomPopup.js           # Zoom level controls
+  │   │   │
+  │   │   └── ui/
+  │   │       └── ResizeHandle.js        # Resizable panel handle
+  │   │
+  │   ├── hooks/                         # Custom React Hooks
+  │   │   ├── useResizableWidth.js       # Drag-to-resize panel hook
+  │   │   └── useSearchSuggestions.js    # Omnibox autocomplete hook
+  │   │
+  │   ├── lib/                           # Library/Utilities
+  │   │   └── firebase.js                # Firebase initialization (Firestore + Auth)
+  │   │
+  │   └── store/                         # Global State
+  │       └── useBrowserStore.js         # Zustand store (1211 lines, 44 KB)
+  │                                      # Tabs, bookmarks, history, downloads,
+  │                                      # AI sessions, sync, permissions, theme
+  │
+  ├── public/                            # Static Assets
+  │   └── favicon.png                    # Application icon (1.3 MB)
+  │
+  ├── .env.local                         # Environment variables (API keys)
+  ├── package.json                       # Dependencies & scripts
+  ├── next.config.mjs                    # Next.js configuration (static export)
+  ├── postcss.config.mjs                 # PostCSS (Tailwind CSS)
+  ├── eslint.config.mjs                  # ESLint configuration
+  ├── jsconfig.json                      # JavaScript path aliases
+  ├── .gitignore                         # Git ignore rules
+  └── README.md                          # Project documentation
+
+================================================================================
+  8. MODULE-WISE DESCRIPTION
+================================================================================
+
+  8.1 ELECTRON MAIN PROCESS (electron/main.js — 1094 lines)
+  ──────────────────────────────────────────────────────────
+
+  The main process is the heart of the application. It runs in a Node.js
+  environment with full OS access and is responsible for:
+
+  •  Application Lifecycle: Handles app.whenReady(), window-all-closed,
+     activate events, and enforces single-instance locking.
+
+  •  Window Creation: The createWindow() function creates frameless
+     BrowserWindow instances with custom preload scripts, session
+     partitions, and icon settings. It supports:
+     - Regular windows (with profile-specific partitions)
+     - Incognito windows (in-memory partitions)
+     - Tab detachment windows (positioned at cursor location)
+     - Profile-specific windows
+
+  •  Stale Cache Cleanup: On startup, the app cleans GPUCache directories
+     and removes stale lock files left by force-kills to prevent
+     "Unable to move the cache" and "Could not open the quota database"
+     errors.
+
+  •  User-Agent Spoofing: Dynamically sets the User-Agent to match a
+     standard Chrome installation, stripping Electron identifiers to
+     prevent bot-detection by websites like Google.
+
+  •  Global Keyboard Shortcuts: Registers an invisible application menu
+     with accelerators for Ctrl+T (new tab), Ctrl+W (close tab),
+     Ctrl+F (find), F12 (DevTools), Ctrl+R (reload), Ctrl+Shift+R
+     (hard reload), and Ctrl+Shift+I/U (inspect).
+
+  •  Tab Merge via Window Proximity: When a window stops moving near
+     another window's tab bar (within 400ms debounce), it automatically
+     triggers a tab merge — sending the source window's tabs to the
+     target and closing the source. Cross-incognito and cross-profile
+     merges are prevented.
+
+  •  AI Backend: Implements the ai-request IPC handler that proxies
+     requests to the OpenRouter API. Supports 10 AI endpoints:
+     /summarize, /explain, /key-points, /faqs, /study-notes, /extract,
+     /generate-post, /rewrite, /translate, and /rag (retrieval-augmented
+     generation with full page context).
+
+  •  Downloads Manager: Intercepts session 'will-download' events,
+     manages download lifecycle (start, progress, pause, resume, cancel,
+     done), and routes progress updates to the UI.
+
+  •  Permissions Manager: Implements a custom permission request handler
+     that prompts the user for Camera, Microphone, Notifications, and
+     Geolocation permissions. Stores decisions in-memory and supports
+     revocation.
+
+  •  Google Account Detection: Uses an offscreen BrowserWindow to load
+     myaccount.google.com and parse the HTML for email, name, and
+     profile picture, with caching to avoid redundant requests.
+
+  •  Document Export: Converts markdown content to styled HTML and
+     exports to PDF (via printToPDF) or DOCX (via html-to-docx).
+
+  •  Safety Check: Integrates with the XposedOrNot API to check if the
+     user's email has appeared in data breaches.
+
+  •  Theme Management: Handles theme-get, theme-set, and theme-save-image
+     IPC handlers. Registers a custom 'theme://' protocol to serve
+     locally saved background images for the new tab page.
+
+  •  Session Management: Handles browsing data clearing via
+     session.clearStorageData().
+
+
+  8.2 TAB MANAGEMENT SYSTEM (electron/tabManager.js — 432 lines)
+  ──────────────────────────────────────────────────────────────
+
+  The TabManager is responsible for the entire lifecycle of browser tabs
+  using Electron's WebContentsView API:
+
+  •  Tab Creation (tab-create): Creates a new WebContentsView with:
+     - Profile-specific session partitions
+     - Context isolation and disabled Node integration
+     - Custom tab-preload.js
+     - Verse Shield navigation guards and cosmetic filters
+     - Force dark mode (if globally enabled)
+
+  •  Event Forwarding: Each tab forwards the following events to the
+     renderer process via the 'tab-event' IPC channel:
+     - did-navigate, did-navigate-in-page (URL updates)
+     - page-title-updated, page-favicon-updated
+     - did-start-loading, did-stop-loading
+     - did-fail-load (with error code filtering)
+     - media-started-playing, media-paused (audio detection)
+     - zoom-changed
+     - found-in-page (search results)
+
+  •  Tab Navigation (tab-navigate): Handles URL loading including
+     the custom view-source: protocol which loads a local HTML page
+     and injects the fetched source code.
+
+  •  Tab Actions (tab-action): Supports 20+ actions including:
+     reload, hard-reload, stop, goBack, goForward, copy, cut, paste,
+     save-page, toggle-devtools, inspect-element, open-file, set-muted,
+     print, zoom-in, zoom-out, zoom-reset, findInPage, find-next,
+     find-prev, stop-find-in-page.
+
+  •  Bounds Management (tab-update-bounds): Attaches/detaches views
+     from the window's contentView based on active state. Inactive
+     tabs are detached to save resources.
+
+  •  Force Dark Mode: Uses Chrome DevTools Protocol (CDP) to enable
+     Emulation.setAutoDarkModeOverride on all tabs. Automatically
+     disables on Google Auth pages to prevent detection issues.
+
+  •  Window Open Handler: Intercepts target="_blank" and window.open()
+     calls. Google Auth popups are allowed natively; Alt+Click triggers
+     save-to-disk; all other new windows open as new tabs.
+
+  •  Tab Capture: Supports capturePage() for tab thumbnail generation.
+
+  •  JavaScript Execution: Allows the renderer to execute arbitrary
+     JavaScript in tab webContents for content extraction (AI features).
+
+
+  8.3 PROFILE MANAGER (electron/profileManager.js — 246 lines)
+  ────────────────────────────────────────────────────────────
+
+  A singleton class that manages multiple user profiles:
+
+  •  Profiles are stored in profiles.json in the userData directory.
+  •  Each profile has: id, name, email, avatar, timestamp.
+  •  Default profile (id: 'main') cannot be deleted.
+  •  Avatars default to DiceBear API-generated illustrations.
+  •  Profiles generate unique session partitions via partitionFor().
+  •  Supports Google account linking/unlinking:
+     - Stores encrypted refresh tokens
+     - Updates profile name, email, and avatar from Google
+  •  Manages per-profile Tavily API key storage (encrypted).
+  •  Registers IPC handlers for get-profiles, create-profile,
+     delete-profile, update-profile-data, switch-profile.
+
+
+  8.4 VERSE SHIELD — AD & TRACKER BLOCKER (electron/verseShield.js — 196 lines)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  Built on top of @ghostery/adblocker-electron (Ghostery's open-source
+  ad blocking engine):
+
+  •  Uses prebuilt EasyList + EasyPrivacy filter lists.
+  •  Supports per-site enable/disable with exception rules (@@||host^).
+  •  Categorizes blocked requests into: ads, trackers, fingerprints.
+  •  Maintains per-tab blocked counts and publishes real-time updates
+     to the UI via 'adblocker-stat-update' IPC events.
+  •  Cosmetic Filters: Injects JavaScript into YouTube pages to:
+     - Remove anti-adblock enforcement modals
+     - Skip/fast-forward video ads (16x playback speed)
+     - Click skip buttons and close overlay ads
+     - Auto-resume video after anti-adblock detection pauses
+     - Uses MutationObserver for real-time DOM monitoring
+  •  Settings persisted in shield-settings.json.
+  •  Applied to all session partitions via app.on('session-created').
+
+
+  8.5 GOOGLE AUTHENTICATION (electron/googleAuth.js — 169 lines)
+  ─────────────────────────────────────────────────────────────
+
+  Implements RFC 8252 "OAuth 2.0 for Native Apps" — the legitimate
+  method for desktop applications:
+
+  •  PKCE (Proof Key for Code Exchange): Generates a code verifier
+     and SHA-256 challenge for security.
+  •  Loopback Server: Spins up a temporary HTTP server on 127.0.0.1
+     with a random port to catch the OAuth redirect.
+  •  System Browser: Opens the Google consent screen in the user's
+     default system browser (not embedded Chromium), avoiding Google's
+     embedded-browser block.
+  •  State Parameter: Uses cryptographic random state to prevent CSRF.
+  •  Token Exchange: Exchanges the authorization code for tokens via
+     the Google OAuth2 token endpoint.
+  •  Profile Fetch: Retrieves user info (email, name, picture) from
+     the OpenID Connect userinfo endpoint.
+  •  Token Encryption: Uses Electron's safeStorage API to encrypt
+     refresh tokens at rest using OS-level credential storage
+     (DPAPI on Windows, Keychain on macOS).
+  •  Token Refresh: Supports silent token refresh using the stored
+     refresh token.
+
+
+  8.6 CONTEXT MENU SYSTEM (electron/contextMenu.js — 248 lines)
+  ───────────────────────────────────────────────────────────────
+
+  Implements comprehensive right-click context menus matching Chrome's
+  behavior across all content types:
+
+  •  Links: Open in new tab, new window, incognito; save link; copy URL.
+  •  Images: Open in new tab; save; copy image/address; Google Lens.
+  •  Videos: Play/pause, mute/unmute, loop, show controls, PiP,
+     save, copy URL, open in new tab.
+  •  Audio: Play/pause, mute/unmute, loop, controls, save, copy URL.
+  •  Canvas: Save canvas as PNG image.
+  •  Editable Fields: Undo, redo, cut, copy, paste, paste-as-plain,
+     delete, select all. Includes spellcheck suggestions and
+     "Add to dictionary" functionality.
+  •  Selected Text: Copy, search Google, print.
+  •  Page/Frame Background: Back, forward, reload, save as, print,
+     view page/frame source.
+  •  View-Source Pages: Copy, select all, save as, print.
+  •  Inspect Element: Available on all context menus.
+
+
+  8.7 WINDOW BOUNDS MANAGER (electron/windowBounds.js — 73 lines)
+  ──────────────────────────────────────────────────────────────
+
+  Replicates Chrome's intelligent window positioning behavior:
+
+  •  Default Bounds: Sizes the window to 85% of the primary display's
+     work area, centered, with a minimum of 960×640.
+  •  State Persistence: Saves window position, size, and maximized
+     state to window-state.json with debounced writes (300ms).
+  •  Multi-Monitor Awareness: Before restoring saved bounds, validates
+     that the saved position overlaps at least one currently connected
+     display's work area. Falls back to default if no display matches.
+  •  Only tracks the main window (not secondary popup windows).
+
+
+  8.8 PRELOAD SCRIPTS & IPC BRIDGE
+  ─────────────────────────────────
+
+  preload.js (175 lines) — The primary IPC bridge between the renderer
+  process and the main process:
+
+  •  Anti-Detection Spoofing: Runs at document-start to:
+     - Inject chrome.runtime, chrome.csi(), chrome.loadTimes()
+     - Fake navigator.plugins with Chrome PDF Plugin
+     - Set navigator.webdriver = false
+     - Override navigator.userAgentData with Chrome brand info
+     This prevents websites from detecting the Electron environment.
+
+  •  Context Bridge API: Exposes the 'electron' namespace with:
+     - Window controls: minimize, maximize, close, toggleFullscreen
+     - Multi-window: newWindow, newIncognitoWindow, detachTab
+     - Profile management: getProfiles, createProfile, switchProfile,
+       deleteProfile, updateProfileData
+     - Theme API: get, set, onChange, saveImage
+     - Safety Check: checkVersion, checkBreaches
+     - Tab Manager: create, destroy, updateBounds, navigate, action,
+       executeJavaScript, capturePage, fetchSource, setForceDark
+     - Verse Shield: getStatus, setForSite, setGlobal
+     - Google OAuth: linkGoogle, unlinkGoogle, checkGoogleLogin,
+       logoutGoogle
+     - Tavily Keys: setTavilyKey, removeTavilyKey, getTavilyKey
+     - Session: clearBrowsingData
+     - Downloads: updateSettings, selectFolder, getDefaultPath,
+       pause, resume, cancel, openFile, showInFolder
+     - Permissions: onPermissionRequest, respondToPermission,
+       revokePermission
+     - AI: aiRequest
+     - Document Export: exportDocument
+     - Event Listeners: keyboard shortcuts, context menu commands,
+       tab merge events, new window events, download events
+
+  tab-preload.js — Injected into each WebContentsView (browser tab).
+  Provides limited, tab-specific functionality.
+
+  auth-preload.js — Minimal preload for authentication popup windows.
+
+
+  8.9 SYSTEM AUTH HANDOFF (electron/system-auth-handoff.js — 129 lines)
+  ──────────────────────────────────────────────────────────────────────
+
+  An alternative authentication mechanism for specific Google services:
+
+  •  Spins up a temporary loopback server on a random port.
+  •  Opens the target Google URL in the system's default browser with
+     the loopback redirect URI appended.
+  •  Uses Zod schema validation for strict callback payload verification.
+  •  Includes a 5-minute timeout to prevent hanging ports.
+  •  Returns the validated authorization code to the main process.
+
+================================================================================
+  9. FRONTEND ARCHITECTURE
+================================================================================
+
+  9.1 LAYOUT & ROUTING
+  ─────────────────────
+
+  The application uses Next.js 16's App Router with a single route:
+
+  •  layout.js: Root HTML layout that loads Geist Sans and Geist Mono
+     fonts, applies the globals.css design tokens, and sets the
+     viewport to full-screen (h-screen, w-screen, overflow-hidden).
+
+  •  page.js: Entry point that renders BrowserLayout wrapping Homepage.
+     All navigation happens within the BrowserLayout component, which
+     renders internal pages (settings, history, bookmarks, etc.) or the
+     WebviewContainer based on the active tab's URL.
+
+  •  globals.css: Defines the design system with CSS custom properties:
+     - Dark theme (default): #0f1015 background, #e2e8f0 foreground,
+       #1a1b23 surface, #6b46c1 accent (purple)
+     - Light theme (.light-theme class): #f8fafc background,
+       #0f172a foreground, #ffffff surface
+     - Tailwind CSS v4 @theme integration
+     - Custom scrollbar styles
+     - Electron drag region classes (-webkit-app-region)
+
+
+  9.2 ZUSTAND STATE MANAGEMENT (src/store/useBrowserStore.js — 1211 lines)
+  ──────────────────────────────────────────────────────────────────────────
+
+  The entire application state is managed by a single Zustand store with
+  persist middleware (localStorage). This monolithic store handles:
+
+  State Slices:
+  •  Tabs: Array of tab objects with id, title, url, favicon, isLoading,
+     error, history (navigation stack), historyIndex, isPlayingAudio,
+     isMuted, isPinned, zoomLevel, findState.
+  •  Active Tab: activeTabId for currently focused tab.
+  •  Bookmarks: Array of bookmark objects with url, title, favicon.
+  •  Bookmark Bar: Visibility setting ('always' or 'new-tab').
+  •  History: Browsing history array.
+  •  Reading List: Saved articles for later reading.
+  •  Downloads: Download items with status tracking.
+  •  Download Settings: Default path, ask-every-time toggle.
+  •  Recently Closed Tabs: Stack with url, title, favicon, closedAt.
+  •  Session Permissions: Per-origin permission grants/denials.
+  •  Active Permission Requests: Queue of pending permission prompts.
+  •  User Auth State: isLoggedIn, userProfilePic, currentUser, accounts.
+  •  Profile ID: Current profile identifier.
+  •  Firebase UID: Authenticated Firebase user ID.
+  •  Incognito Flag: Whether current window is incognito.
+  •  Hidden Top Sites: Sites hidden from the new tab page grid.
+  •  Home Button Visibility: Toggle for home button (hidden by default).
+  •  Installed Extensions: Extension metadata array.
+
+  AI State:
+  •  isAISidebarOpen: Toggle for AI sidebar visibility.
+  •  openRouterApiKey: User's OpenRouter API key.
+  •  aiChatSessions: Array of AI conversation sessions.
+  •  currentAiSessionId: Active AI session.
+  •  selectedAiModel: Current AI model (default: llama-3.1-8b-instruct).
+  •  researchMode: Toggle for deep research mode.
+  •  aiQueryToExecute: Pending AI query (for URL bar → AI handoff).
+
+  Key Actions:
+  •  Tab CRUD: addTab, closeTab, setActiveTab, updateTab, navigateTo.
+  •  Tab Features: pinTab, toggleMuteTab, duplicateTab, toggleSplitView.
+  •  Bookmark CRUD: addBookmark, removeBookmark, isBookmarked.
+  •  History: addToHistory, clearHistory.
+  •  Reading List: addToReadingList, removeFromReadingList.
+  •  Firebase Sync: syncFirebaseData (bidirectional merge of bookmarks,
+     reading list, AI sessions, and theme settings).
+  •  AI Sessions: saveAiSession, deleteAiSession, clearAllAiSessions
+     (with Firebase sub-collection sync for messages).
+
+
+  9.3 COMPONENT HIERARCHY
+  ────────────────────────
+
+  BrowserLayout (Shell)
+  ├── PermissionPrompt (Modal overlay)
+  ├── TopBar (Tab strip + window controls)
+  │   ├── Tab items (with dnd-kit DnD)
+  │   ├── New Tab button
+  │   └── Window controls (minimize, maximize, close)
+  │
+  ├── NavigationBar (URL bar area)
+  │   ├── Navigation buttons (back, forward, reload, home)
+  │   ├── Omnibox (URL/search input with suggestions)
+  │   │   └── SuggestionsDropdown
+  │   ├── VerseShieldPopup
+  │   ├── SiteSettingsPopup
+  │   ├── BookmarkBar
+  │   ├── ZoomPopup
+  │   ├── DownloadsPopup
+  │   ├── HistoryPopup
+  │   ├── ProfileMenu
+  │   └── BrowserMenu (three-dot menu)
+  │
+  ├── FindBar (Find-in-page, conditional)
+  ├── TabContextMenu (Right-click on tabs)
+  │
+  ├── Content Area (conditional rendering)
+  │   ├── Homepage (for browser://newtab)
+  │   │   ├── HeroSection (search + greeting)
+  │   │   ├── TopSites (frequently visited)
+  │   │   ├── RecentTabs (recently closed)
+  │   │   └── LiveNews (news feed)
+  │   │
+  │   ├── WebviewContainer (for web URLs)
+  │   ├── SettingsPage (for browser://settings)
+  │   ├── HistoryPage (for browser://history)
+  │   ├── BookmarksPage (for browser://bookmarks)
+  │   ├── DownloadsPage (for browser://downloads)
+  │   ├── ReadingListPage (for browser://reading-list)
+  │   ├── ReaderPage (for browser://reader)
+  │   ├── ExtensionsPage (for browser://extensions)
+  │   └── ExtensionStorePage (for browser://extension-store)
+  │
+  ├── AISidebar (Resizable side panel, conditional)
+  │   ├── Session list
+  │   ├── Model selector
+  │   ├── Chat messages
+  │   ├── Context actions (summarize, explain, etc.)
+  │   ├── Deep research panel
+  │   └── Export controls (PDF/DOCX)
+  │
+  └── Modals
+      ├── ClearDataModal
+      └── CustomizeThemeModal
+
+================================================================================
+  10. FEATURE CATALOGUE
+================================================================================
+
+  10.1 CORE BROWSING
+  ──────────────────
+
+  •  Chromium Rendering Engine: All web content is rendered by the same
+     Chromium engine that powers Google Chrome, ensuring full
+     compatibility with modern web standards.
+
+  •  Omnibox (Unified Search/Address Bar): The URL bar intelligently
+     detects valid URLs and domains. If the input contains a dot and
+     no spaces, it's treated as a domain and prefixed with https://.
+     Otherwise, it falls back to a Google search query. Features include:
+     - Real-time search suggestions
+     - Tab search/switching from the omnibox
+     - Keyboard navigation of suggestions
+
+  •  Navigation Controls: Back, Forward, Reload, Hard Reload (bypass
+     cache), Stop Loading, and optional Home button.
+
+  •  Find in Page: Ctrl+F activates a find bar with:
+     - Real-time match highlighting
+     - Match count and current position
+     - Next/Previous navigation
+     - Close button
+
+  •  Page Zooming: Zoom in (Ctrl++), zoom out (Ctrl+-), and reset
+     (Ctrl+0) with a visual zoom level indicator.
+
+  •  Print Support: Native printing via Chromium's built-in print
+     dialog.
+
+  •  View Source: Custom view-source: protocol implementation that
+     loads a dedicated HTML page and injects syntax-highlighted source.
+
+  •  Native PDF Viewing: Built-in PDF viewer via Chromium.
+
+  •  Open File: Open local files (PDF, HTML, TXT, MD, images) in a
+     browser tab via a native file dialog.
+
+
+  10.2 ADVANCED TAB MANAGEMENT
+  ────────────────────────────
+
+  •  Multi-Tab Browsing: Open, close, and switch between unlimited tabs.
+     Each tab maintains its own navigation history, zoom level, find
+     state, audio state, and loading status.
+
+  •  Drag-and-Drop Tabs: Tabs can be reordered by dragging within the
+     tab bar using @dnd-kit. Smooth animations and visual feedback.
+
+  •  Tab Pinning: Pin important tabs to the left of the tab bar. Pinned
+     tabs display only the favicon (no title) to save space.
+
+  •  Split View: View two tabs side-by-side simultaneously within a
+     single window. The split view divides the content area equally.
+
+  •  Recently Closed Tabs: A stack of recently closed tabs that can be
+     reopened with their original URL, title, and favicon.
+
+  •  Tab Audio Controls: Tabs that are playing audio display a speaker
+     icon. Users can mute/unmute individual tabs directly from the tab
+     bar or context menu.
+
+  •  Tab Context Menu (Right-Click):
+     - New Tab to the Right
+     - Duplicate Tab
+     - Pin / Unpin Tab
+     - Mute / Unmute Tab
+     - Close Other Tabs
+     - Close Tabs to the Right
+     - Open in New Window
+     - Open in Incognito Window
+
+  •  Tab Persistence: Tab state (URL, title, favicon) is persisted
+     across application restarts via Zustand's persist middleware.
+
+
+  10.3 WINDOW MANAGEMENT & PROXIMITY FEATURES
+  ────────────────────────────────────────────
+
+  •  Multi-Window Support: Multiple independent browser windows can
+     run simultaneously, each with their own set of tabs.
+
+  •  Tear-Off Tabs: Drag a tab downward out of the tab bar to spawn it
+     into a brand new window positioned at the cursor location. A
+     transparent "mini-window" preview appears during the drag.
+
+  •  Tab Merge via Window Proximity: When dragging one window's title
+     bar near another window's tab bar (within a ~60px vertical zone),
+     the source window's tabs are automatically merged into the target
+     window, and the source window closes. Cross-profile and
+     cross-incognito merges are blocked for security.
+
+  •  Frameless Window: Custom title bar with window controls
+     (minimize, maximize/restore, close) rendered in React.
+
+  •  Fullscreen Toggle: F11 toggles fullscreen mode.
+
+  •  Window State Persistence: Window position, size, and maximized
+     state are saved and restored on next launch, with multi-monitor
+     awareness.
+
+
+  10.4 PRIVACY & SECURITY
+  ────────────────────────
+
+  •  True Incognito Mode: Fully isolated sessions using Electron's
+     in-memory partitions. Incognito windows:
+     - Do not save browsing history
+     - Do not persist cookies, cache, or storage
+     - Are isolated from normal windows and other profiles
+     - Cannot merge with non-incognito windows
+     - Display a visual incognito indicator
+
+  •  Verse Shield (Ad & Tracker Blocker): Built-in protection powered
+     by Ghostery's adblocker engine (see Section 8.4 for details).
+     - Blocks ads, trackers, and fingerprinting scripts
+     - Per-site enable/disable toggles
+     - Real-time blocked count display
+     - YouTube-specific anti-adblock circumvention
+
+  •  Permissions Manager: Site-specific permission prompts for:
+     - Camera
+     - Microphone
+     - Notifications
+     - Geolocation
+     Permissions can be granted, denied, or revoked from Settings.
+
+  •  User-Agent & Fingerprint Masking: The browser spoofs its identity
+     as standard Chrome to prevent tracking and bot-detection.
+     navigator.webdriver is set to false, and userAgentData brands
+     are overridden.
+
+  •  Context Isolation: All renderer processes use contextIsolation:
+     true and nodeIntegration: false, ensuring web pages cannot access
+     Node.js APIs.
+
+  •  HTTPS Upgrade: Verse Shield includes navigation guards that can
+     strip tracking parameters from URLs.
+
+  •  Session Data Clearing: Users can clear all browsing data (cookies,
+     cache, storage) from the Settings page.
+
+  •  Single Instance Lock: Only one instance of the browser can run at
+     a time, preventing data corruption from concurrent file access.
+
+
+  10.5 CLOUD SYNCING (FIREBASE)
+  ─────────────────────────────
+
+  •  Firebase Integration: Uses Firebase Firestore for real-time cloud
+     storage and Google Authentication for user identity.
+
+  •  Firebase Configuration:
+     - Project: verse-ai-browser
+     - Auth Domain: verse-ai-browser.firebaseapp.com
+     - Measurement ID: G-W4YG0FDMJM
+
+  •  Synced Data:
+     - Bookmarks (bidirectional merge by URL deduplication)
+     - Reading List (bidirectional merge)
+     - AI Chat Sessions (with sub-collection for messages)
+     - Theme Settings
+     - Browsing History
+
+  •  Firestore Data Model:
+     users/{uid}/profiles/{profileEmail}/
+       ├── bookmarks/{docId}       — {url, title, favicon, ...}
+       ├── readingList/{docId}     — {url, title, ...}
+       ├── aiChatSessions/{id}    — {title, updatedAt, lastSynced}
+       │   └── ChatHistory/{msgId} — {role, content, index, timestamp}
+       └── themeSettings/          — {mode, customBg, ...}
+
+  •  Multi-Profile Support: Sync is scoped to the active profile's
+     email, allowing multiple Google accounts to maintain separate
+     synced data.
+
+
+  10.6 HISTORY & BOOKMARKS
+  ─────────────────────────
+
+  •  History Manager (browser://history):
+     - Full browsing history sorted by date
+     - Search/filter functionality
+     - Clear history (all or selective)
+     - Click to revisit any past page
+     - Synced to Firebase when logged in
+
+  •  Bookmarks Manager (browser://bookmarks):
+     - Save pages with title, URL, and favicon
+     - Remove bookmarks
+     - Bookmark indicator in the navigation bar
+     - Synced to Firebase
+
+  •  Bookmarks Bar:
+     - Toggleable toolbar below the navigation bar
+     - Visibility modes: 'always' or 'new-tab' only
+     - Displays saved bookmarks with favicons
+
+
+  10.7 DOWNLOADS MANAGEMENT
+  ─────────────────────────
+
+  •  Built-in Download Manager:
+     - Downloads popup in the toolbar for quick access
+     - Full downloads page (browser://downloads) for history
+     - Real-time progress tracking (bytes received / total)
+     - Download state indicators (progressing, paused, interrupted,
+       completed, cancelled)
+     - Pause / Resume / Cancel controls
+     - Open downloaded file
+     - Show in folder (reveal in file explorer)
+
+  •  Download Settings:
+     - Configure default download directory
+     - Toggle "Ask where to save each file before downloading"
+     - When saving webpages, suggests the page title as filename
+
+
+  10.8 BUILT-IN AI ASSISTANT
+  ──────────────────────────
+
+  •  AI Sidebar: A persistent, resizable panel on the right side of
+     the browser that provides conversational AI assistance.
+
+  •  Multi-Model Support: Connects via the OpenRouter API to seamlessly
+     switch between AI models from:
+     - Meta (Llama 3.1 8B — default)
+     - Google (Gemini)
+     - Anthropic (Claude)
+     - DeepSeek
+     - Mistral
+     - Qwen
+     - OpenAI (GPT)
+
+  •  Context-Aware Page Actions: The AI can read the active tab's
+     content (up to 12,000 characters) and perform:
+     - Summarize: Concise page summary with headers and bullet points
+     - Explain: Simple, easy-to-understand explanation
+     - Key Points: Extracted key points as a formatted list
+     - FAQs: Generated frequently asked questions with answers
+     - Study Notes: Comprehensive study notes with key terms
+     - Extract Data: Targeted data extraction (emails, links, etc.)
+     - Generate Post: Social media content creation
+     - Rewrite: Content rewriting in a specified style
+     - Translate: Translation to any target language
+     - RAG (Ask Questions): Retrieval-augmented Q&A about the page,
+       with support for selected text context
+
+  •  Chat Sessions: Full conversation history with session management:
+     - Create new sessions
+     - Switch between sessions
+     - Delete individual sessions
+     - Clear all sessions
+     - Sessions synced to Firebase (with message sub-collections)
+
+  •  API Key Management: Users can enter their OpenRouter API key
+     through the UI, or configure it via the .env.local file.
+
+
+  10.9 DEEP RESEARCH MODE
+  ────────────────────────
+
+  •  Tavily Integration: Uses the Tavily API for autonomous web search,
+     content extraction, and report synthesis.
+
+  •  Research Workflow:
+     1. User enters a research query
+     2. The AI formulates search queries
+     3. Tavily searches the web and returns relevant results
+     4. The AI analyzes multiple sources
+     5. A comprehensive research report is synthesized
+     6. The report can be exported to PDF or DOCX
+
+  •  Per-Profile API Keys: Tavily API keys are stored encrypted
+     per-profile in the profile manager, using Electron's safeStorage.
+
+
+  10.10 READING MODE
+  ──────────────────
+
+  •  Powered by @mozilla/readability (the same library used by
+     Firefox's Reader View).
+  •  Extracts article content and removes ads, navigation, and clutter.
+  •  Renders clean, formatted text with typography optimizations.
+  •  Accessible via the browser menu or navigation bar.
+
+
+  10.11 CUSTOMIZATION & THEMING
+  ──────────────────────────────
+
+  •  Dark/Light Mode: Seamless toggle between dark and light themes.
+     The theme affects the entire UI through CSS custom properties.
+
+  •  Glassmorphism Design: The UI features frosted-glass effects,
+     semi-transparent backgrounds, and subtle blur for a premium feel.
+
+  •  Custom New Tab Background: Users can upload custom background
+     images for the new tab page. Images are:
+     - Converted to Base64 or saved via the theme:// protocol
+     - Stored in the userData/themes directory
+     - Persisted across sessions
+
+  •  Theme Sync: Theme preferences are synced to Firebase when the
+     user is logged in.
+
+
+  10.12 KEYBOARD SHORTCUTS
+  ────────────────────────
+
+  ┌────────────────────────┬─────────────────────────────────────────┐
+  │ Shortcut               │ Action                                   │
+  ├────────────────────────┼─────────────────────────────────────────┤
+  │ Ctrl/Cmd + T           │ Open new tab                             │
+  │ Ctrl/Cmd + W           │ Close active tab                         │
+  │ Ctrl/Cmd + F           │ Find in page                             │
+  │ Ctrl/Cmd + H           │ Open History                             │
+  │ Ctrl/Cmd + J           │ Open Downloads                           │
+  │ Ctrl/Cmd + R           │ Reload page                              │
+  │ Ctrl/Cmd + Shift + R   │ Hard reload (bypass cache)               │
+  │ Ctrl/Cmd + Shift + I   │ Toggle DevTools                          │
+  │ Ctrl/Cmd + Shift + U   │ Inspect UI (renderer DevTools)           │
+  │ F11                    │ Toggle fullscreen                        │
+  │ F12                    │ Toggle DevTools                          │
+  │ Mouse Back Button      │ Navigate back                            │
+  │ Mouse Forward Button   │ Navigate forward                         │
+  └────────────────────────┴─────────────────────────────────────────┘
+
+
+  10.13 ACCESSIBILITY (ARIA)
+  ──────────────────────────
+
+  •  Full ARIA screen-reader support across the entire custom user
+     interface, compatible with NVDA, Narrator, and VoiceOver.
+  •  Semantic HTML5 elements used throughout.
+  •  Keyboard navigation support for all interactive elements.
+  •  Focus management for modals, popups, and menus.
+  •  Descriptive aria-labels for buttons, inputs, and navigation.
+
+
+  10.14 DOCUMENT EXPORT
+  ─────────────────────
+
+  •  PDF Export: Uses Electron's printToPDF API with an offscreen
+     BrowserWindow to render styled HTML and export to PDF.
+
+  •  DOCX Export: Uses html-to-docx library to convert styled HTML
+     to Microsoft Word format with proper formatting.
+
+  •  Export Features:
+     - Styled output with system fonts and proper typography
+     - Code blocks with monospace formatting
+     - Tables, blockquotes, and heading hierarchy
+     - Custom filenames based on the research query
+     - Automatic page numbering and footers (DOCX)
+
+
+  10.15 SAFETY CHECK
+  ──────────────────
+
+  •  Version Check: Compares the current app version against the
+     latest release (currently hardcoded, planned for GitHub
+     Releases API).
+
+  •  Email Breach Monitor: Powered by the XposedOrNot API (free,
+     no API key required):
+     - Checks if the user's email has appeared in known data breaches
+     - Returns breach count and details
+     - Integrated into the Settings page
+
+
+  10.16 EXTENSIONS STORE (PREVIEW)
+  ────────────────────────────────
+
+  •  Mock Extension Store: An interface to browse and manage browser
+     extensions and add-ons.
+  •  Currently in preview/prototype state.
+  •  Tracks installed extensions in the Zustand store.
+
+================================================================================
+  11. DESIGN SYSTEM & UI/UX
+================================================================================
+
+  Visual Design Language:
+
+  •  Color Palette:
+     - Dark Theme Primary: #0f1015 (deep blue-black)
+     - Light Theme Primary: #f8fafc (soft white-blue)
+     - Accent Color: #6b46c1 (rich purple)
+     - Accent Hover: #805ad5 (lighter purple)
+     - Surface Dark: #1a1b23 (elevated dark gray)
+     - Surface Light: #ffffff (white)
+     - Border Dark: #2d3748 / Border Light: #e2e8f0
+
+  •  Typography:
+     - Primary Font: Geist Sans (Google Fonts)
+     - Monospace Font: Geist Mono (for code, URLs, technical content)
+     - Font loading via Next.js font optimization
+
+  •  UI Techniques:
+     - Glassmorphism: Frosted-glass effects with backdrop-blur
+     - Micro-Animations: Smooth transitions and hover effects
+     - Custom Scrollbars: Themed scrollbars matching the color scheme
+     - No-Drag Regions: Careful management of Electron drag regions
+       so that interactive elements work within the title bar area
+
+  •  Responsive Layout:
+     - Minimum window size: 800×540
+     - Flexible content area with resizable AI sidebar
+     - Tab bar adapts to available width
+     - Split view divides content area proportionally
+
+================================================================================
+  12. SECURITY ARCHITECTURE
+================================================================================
+
+  Security Layers:
+
+  1. Process Isolation:
+     •  Main process: Full Node.js access, handles sensitive operations
+     •  Renderer process: Sandboxed, no direct Node.js access
+     •  Tab processes: Fully isolated WebContentsView instances
+
+  2. Context Isolation:
+     •  All windows use contextIsolation: true
+     •  All windows use nodeIntegration: false
+     •  IPC communication via contextBridge only
+
+  3. Session Isolation:
+     •  Each profile gets a unique persist:<id> partition
+     •  Incognito uses in-memory partition (no persistence)
+     •  Cross-partition cookie/storage access is impossible
+
+  4. OAuth Security (RFC 8252):
+     •  PKCE code challenge (SHA-256)
+     •  Cryptographic state parameter (CSRF prevention)
+     •  Loopback server on 127.0.0.1 (no external exposure)
+     •  System browser for consent (not embedded WebView)
+
+  5. Token Encryption:
+     •  Refresh tokens encrypted via Electron safeStorage
+     •  Uses OS-level credential storage (DPAPI/Keychain)
+     •  Tavily API keys also stored encrypted
+
+  6. Anti-Detection:
+     •  User-Agent spoofed to match standard Chrome
+     •  navigator.webdriver set to false
+     •  Electron/app-name strings removed from headers
+     •  userAgentData brands forged to Chrome
+
+  7. Input Validation:
+     •  Zod schema validation for OAuth callbacks
+     •  URL validation in the omnibox
+     •  Profile name validation
+
+  8. Stale Lock Cleanup:
+     •  GPUCache nuked on startup
+     •  Lock files removed to prevent corruption
+     •  Single instance enforcement
+
+================================================================================
+  13. INTER-PROCESS COMMUNICATION (IPC) CATALOGUE
+================================================================================
+
+  All IPC communication is routed through Electron's contextBridge,
+  ensuring the renderer never has direct access to ipcRenderer.
+
+  ipcMain.on (Fire-and-forget):
+  ┌──────────────────────────────┬──────────────────────────────────────┐
+  │ Channel                      │ Purpose                              │
+  ├──────────────────────────────┼──────────────────────────────────────┤
+  │ window-minimize              │ Minimize the window                  │
+  │ window-maximize              │ Toggle maximize/restore              │
+  │ window-close                 │ Close the window                     │
+  │ window-toggle-fullscreen     │ Toggle fullscreen mode               │
+  │ window-new                   │ Open new regular window              │
+  │ window-new-incognito         │ Open new incognito window            │
+  │ move-window                  │ Custom window dragging               │
+  │ detach-tab                   │ Tear off tab into new window         │
+  │ send-tabs-for-merge          │ Send tabs to merge target            │
+  │ clear-browsing-data          │ Clear all session data               │
+  │ switch-profile               │ Open/focus profile window            │
+  │ tab-create                   │ Create WebContentsView               │
+  │ tab-destroy                  │ Destroy WebContentsView              │
+  │ tab-update-bounds            │ Update tab position/visibility       │
+  │ tab-navigate                 │ Navigate tab to URL                  │
+  │ tab-action                   │ Perform tab action (20+ types)       │
+  │ set-force-dark               │ Toggle force dark mode               │
+  │ theme-set                    │ Set native theme source              │
+  │ update-download-settings     │ Update download preferences          │
+  │ pause-download               │ Pause active download                │
+  │ resume-download              │ Resume paused download               │
+  │ cancel-download              │ Cancel active download               │
+  │ open-file                    │ Open file with default app           │
+  │ show-in-folder               │ Reveal file in file explorer         │
+  │ permission-response          │ User's permission decision           │
+  │ revoke-permission            │ Revoke a granted permission          │
+  │ google-signin-popup          │ Trigger Google sign-in popup         │
+  │ system-handoff-success       │ Handle auth handoff result           │
+  └──────────────────────────────┴──────────────────────────────────────┘
+
+  ipcMain.handle (Request-Response):
+  ┌──────────────────────────────┬──────────────────────────────────────┐
+  │ Channel                      │ Purpose                              │
+  ├──────────────────────────────┼──────────────────────────────────────┤
+  │ check-google-login           │ Detect Google account status         │
+  │ logout-google                │ Clear Google cookies                 │
+  │ get-window-count             │ Count open windows                   │
+  │ get-profiles                 │ List all profiles                    │
+  │ create-profile               │ Create new profile                   │
+  │ delete-profile               │ Delete a profile                     │
+  │ update-profile-data          │ Update profile metadata              │
+  │ profiles:linkGoogle          │ Link Google account to profile       │
+  │ profiles:unlinkGoogle        │ Unlink Google account                │
+  │ profiles:setTavilyKey        │ Store encrypted Tavily key           │
+  │ profiles:removeTavilyKey     │ Remove stored Tavily key             │
+  │ profiles:getTavilyKey        │ Retrieve decrypted Tavily key        │
+  │ theme-get                    │ Get current theme                    │
+  │ theme-save-image             │ Save NTP background image            │
+  │ safety-check-version         │ Check app version                    │
+  │ safety-check-breaches        │ Check email breaches                 │
+  │ export-document              │ Export to PDF/DOCX                   │
+  │ ai-request                   │ Proxy AI request to OpenRouter       │
+  │ select-download-folder       │ Open folder picker dialog            │
+  │ get-default-download-path    │ Get OS downloads directory           │
+  │ tab-execute-javascript       │ Execute JS in tab webContents        │
+  │ tab-capture-page             │ Capture tab screenshot               │
+  │ fetch-source                 │ Fetch URL source code                │
+  │ shield:getStatus             │ Get shield status for hostname       │
+  │ shield:setForSite            │ Set shield per-site override         │
+  │ shield:setGlobal             │ Toggle global shield                 │
+  └──────────────────────────────┴──────────────────────────────────────┘
+
+  Main → Renderer Events:
+  ┌──────────────────────────────┬──────────────────────────────────────┐
+  │ Channel                      │ Purpose                              │
+  ├──────────────────────────────┼──────────────────────────────────────┤
+  │ tab-event                    │ Tab lifecycle events (15+ types)     │
+  │ keyboard-shortcut            │ Global keyboard shortcut actions     │
+  │ context-menu-command         │ Context menu action results          │
+  │ theme-updated                │ Theme change notification            │
+  │ permission-request           │ Permission prompt data               │
+  │ download-started             │ New download notification            │
+  │ download-progress            │ Download progress update             │
+  │ download-done                │ Download completed/cancelled         │
+  │ adblocker-stat-update        │ Shield blocked count update          │
+  │ request-tabs-for-merge       │ Tab merge proximity trigger          │
+  │ receive-merged-tabs          │ Incoming merged tab data             │
+  │ webview-new-window           │ New window request from webview      │
+  └──────────────────────────────┴──────────────────────────────────────┘
+
+================================================================================
+  14. THIRD-PARTY DEPENDENCIES
+================================================================================
+
+  Production Dependencies (23):
+  ┌──────────────────────────────┬───────────┬─────────────────────────────┐
+  │ Package                      │ Version   │ Purpose                      │
+  ├──────────────────────────────┼───────────┼─────────────────────────────┤
+  │ @dnd-kit/core                │ ^6.3.1    │ Drag-and-drop foundation     │
+  │ @dnd-kit/sortable            │ ^10.0.0   │ Sortable tab lists           │
+  │ @dnd-kit/utilities           │ ^3.2.2    │ DnD utility helpers          │
+  │ @ghostery/adblocker-electron │ ^2.18.1   │ Ad/tracker blocking engine   │
+  │ @mozilla/readability         │ ^0.6.0    │ Reading mode article parser  │
+  │ @tailwindcss/typography      │ ^0.5.20   │ Prose formatting plugin      │
+  │ axios                        │ ^1.18.1   │ HTTP client                  │
+  │ clsx                         │ ^2.1.1    │ Conditional CSS classes      │
+  │ cross-fetch                  │ ^4.1.0    │ Isomorphic fetch polyfill    │
+  │ dotenv                       │ ^17.4.2   │ Environment variable loader  │
+  │ firebase                     │ ^12.15.0  │ Cloud database & auth        │
+  │ google-auth-library          │ ^10.9.0   │ Google OAuth utilities       │
+  │ html-to-docx                 │ ^1.8.0    │ HTML to DOCX conversion      │
+  │ lucide-react                 │ ^1.23.0   │ Icon library (primary)       │
+  │ marked                       │ ^18.0.6   │ Markdown to HTML parser      │
+  │ next                         │ 16.2.10   │ React framework              │
+  │ qrcode.react                 │ ^4.2.0    │ QR code generation           │
+  │ react                        │ 19.2.4    │ UI library                   │
+  │ react-dom                    │ 19.2.4    │ React DOM renderer           │
+  │ react-icons                  │ ^5.7.0    │ Icon library (secondary)     │
+  │ react-markdown               │ ^10.1.0   │ Markdown renderer component  │
+  │ zod                          │ ^4.4.3    │ Schema validation            │
+  │ zustand                      │ ^5.0.14   │ State management             │
+  └──────────────────────────────┴───────────┴─────────────────────────────┘
+
+  Dev Dependencies (10):
+  ┌──────────────────────────────┬───────────┬─────────────────────────────┐
+  │ Package                      │ Version   │ Purpose                      │
+  ├──────────────────────────────┼───────────┼─────────────────────────────┤
+  │ @tailwindcss/postcss         │ ^4        │ Tailwind CSS PostCSS plugin  │
+  │ concurrently                 │ ^10.0.3   │ Run multiple scripts         │
+  │ cross-env                    │ ^10.1.0   │ Cross-platform env vars      │
+  │ electron                     │ ^43.0.0   │ Desktop runtime              │
+  │ electron-builder             │ ^26.15.3  │ Build & packaging            │
+  │ eslint                       │ ^9        │ Code linting                 │
+  │ eslint-config-next           │ 16.2.10   │ Next.js ESLint rules         │
+  │ prettier                     │ ^3.9.4    │ Code formatting              │
+  │ prettier-plugin-tailwindcss  │ ^0.8.0    │ Tailwind class sorting       │
+  │ tailwindcss                  │ ^4        │ CSS framework                │
+  │ wait-on                      │ ^9.0.10   │ Wait for dev server          │
+  └──────────────────────────────┴───────────┴─────────────────────────────┘
+
+================================================================================
+  15. ENVIRONMENT VARIABLES & CONFIGURATION
+================================================================================
+
+  Environment Variables (.env.local):
+
+  ┌─────────────────────────────────────────┬─────────────────────────────┐
+  │ Variable                                │ Purpose                      │
+  ├─────────────────────────────────────────┼─────────────────────────────┤
+  │ NEXT_PUBLIC_FIREBASE_API_KEY            │ Firebase Web API key         │
+  │ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN        │ Firebase Auth domain         │
+  │ NEXT_PUBLIC_FIREBASE_PROJECT_ID         │ Firebase project ID          │
+  │ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET     │ Firebase storage bucket      │
+  │ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID│ Firebase messaging sender    │
+  │ NEXT_PUBLIC_FIREBASE_APP_ID             │ Firebase application ID      │
+  │ OPENROUTER_API_KEY                      │ OpenRouter AI API key        │
+  │ GOOGLE_CLIENT_ID                        │ Google OAuth client ID       │
+  │ GOOGLE_CLIENT_SECRET                    │ Google OAuth client secret   │
+  │ TAVILY_API_KEY                          │ Tavily research API key      │
+  └─────────────────────────────────────────┴─────────────────────────────┘
+
+  Note: Tavily API keys can also be entered through the browser's UI
+  and are stored encrypted per-profile.
+
+  Configuration Files:
+
+  •  next.config.mjs: Static export mode (output: 'export'), unoptimized
+     images (required for Electron file:// loading).
+
+  •  eslint.config.mjs: ESLint 9 flat config with eslint-config-next
+     core-web-vitals rules. Ignores .next/, out/, and build/ directories.
+
+  •  postcss.config.mjs: PostCSS with @tailwindcss/postcss plugin.
+
+  •  jsconfig.json: Path alias mapping (@ → src/).
+
+  •  package.json build config: electron-builder configuration for
+     Windows (NSIS + portable), macOS (DMG + ZIP), and Linux (AppImage
+     + DEB).
+
+================================================================================
+  16. BUILD & DISTRIBUTION
+================================================================================
+
+  NPM Scripts:
+
+  ┌────────────────┬───────────────────────────────────────────────────────┐
+  │ Script          │ Command & Description                                │
+  ├────────────────┼───────────────────────────────────────────────────────┤
+  │ npm run dev     │ next dev — Start Next.js dev server                  │
+  │ npm run build   │ next build — Build Next.js static export             │
+  │ npm run start   │ next start — Start Next.js production server         │
+  │ npm run lint    │ eslint — Run ESLint                                  │
+  │ npm run electron│ electron . — Launch Electron directly                │
+  │ npm run desktop │ concurrently: dev server + electron (with wait-on)   │
+  │ npm run dist    │ next build → electron-builder (production package)   │
+  └────────────────┴───────────────────────────────────────────────────────┘
+
+  Development Workflow:
+  1. Run 'npm run desktop' to start the Next.js dev server and Electron
+     simultaneously. The 'wait-on' utility ensures Electron only launches
+     after the dev server is ready on http://localhost:3000.
+
+  Production Build:
+  1. Run 'npm run dist' to build the Next.js static export and package
+     the Electron application using electron-builder.
+
+  Distribution Targets:
+  ┌──────────────┬──────────────────────────────────────────────────────┐
+  │ Platform     │ Output Formats                                        │
+  ├──────────────┼──────────────────────────────────────────────────────┤
+  │ Windows      │ NSIS Installer (.exe) + Portable (.exe)               │
+  │ macOS        │ DMG (.dmg) + ZIP (.zip)                               │
+  │              │ Category: public.app-category.productivity            │
+  │ Linux        │ AppImage + Debian Package (.deb)                      │
+  └──────────────┴──────────────────────────────────────────────────────┘
+
+  Build Output:
+  •  Static HTML/JS/CSS files are output to the /out directory.
+  •  Packaged distributables are output to the /dist directory.
+  •  The production build includes /out and /electron directories.
+
+================================================================================
+  17. CODEBASE STATISTICS
+================================================================================
+
+  ┌─────────────────────────────────┬──────────────────────────────────────┐
+  │ Metric                          │ Value                                │
+  ├─────────────────────────────────┼──────────────────────────────────────┤
+  │ Total Source Files (src/)       │ 42 files                             │
+  │ Total Source Size (src/)        │ ~414 KB                              │
+  │ Total Lines of Code (src/)     │ ~9,601 lines                         │
+  │ Electron Process Files         │ 12 files                             │
+  │ Electron Code Size             │ ~114 KB                              │
+  │ Electron Lines of Code         │ ~2,990 lines                         │
+  │ Combined Lines of Code         │ ~12,591 lines                        │
+  │ Combined Source Size            │ ~528 KB                              │
+  │ React Components               │ 34 components                        │
+  │ Custom React Hooks             │ 2 hooks                              │
+  │ Zustand Store Lines            │ 1,211 lines                          │
+  │ Main Process Entry (main.js)   │ 1,094 lines                          │
+  │ AI Sidebar Component           │ ~70 KB (largest single component)    │
+  │ Production Dependencies        │ 23 packages                          │
+  │ Dev Dependencies               │ 10 packages                          │
+  │ Total npm Dependencies         │ 33 packages                          │
+  │ Component Subdirectories       │ 8 directories                        │
+  │ IPC Channels (send)            │ 28 channels                          │
+  │ IPC Channels (handle)          │ 26 channels                          │
+  │ IPC Events (main→renderer)     │ 12 event types                       │
+  └─────────────────────────────────┴──────────────────────────────────────┘
+
+================================================================================
+  18. FUTURE SCOPE & ROADMAP
+================================================================================
+
+  •  Extensions System: Full Chromium extension compatibility via
+     Electron's extension loading API.
+  •  Multi-Tab Grouping: Group related tabs with color-coded labels.
+  •  PWA Support: Install progressive web apps as standalone windows.
+  •  Sync History: Extend Firebase sync to include full browsing history.
+  •  Password Manager: Built-in password storage with autofill.
+  •  Sidebar Apps: Embeddable web apps in the sidebar (Spotify, Slack).
+  •  Tab Hibernation: Automatically suspend inactive tabs to save memory.
+  •  Performance Dashboard: Monitor memory and CPU usage per tab.
+  •  Vertical Tabs: Optional vertical tab bar layout.
+  •  Multi-Language UI: Internationalization (i18n) support.
+  •  Auto-Update: GitHub Releases API integration for OTA updates.
+  •  WebRTC Screen Sharing: Enhanced media capabilities.
+
+================================================================================
+  19. CONCLUSION
+================================================================================
+
+  Verse Browser demonstrates that it is entirely feasible to build a
+  fully featured, production-grade desktop web browser using JavaScript
+  technologies. By combining Electron's Chromium engine with Next.js's
+  React framework, the project delivers a modern browsing experience
+  that rivals established browsers in core functionality while surpassing
+  them in AI integration and customization.
+
+  Key achievements of this project include:
+
+  •  A complete browser implementation with ~12,600 lines of code across
+     54 source files, featuring tabs, navigation, downloads, bookmarks,
+     history, permissions, and multi-profile support.
+
+  •  Deep AI integration through the OpenRouter API, enabling 10+
+     context-aware page actions and autonomous deep research via Tavily.
+
+  •  Built-in privacy features including ad/tracker blocking (Verse
+     Shield), true incognito mode, and anti-fingerprinting measures.
+
+  •  Cross-device cloud synchronization via Firebase Firestore for
+     bookmarks, reading lists, AI conversations, and theme settings.
+
+  •  A polished, accessible UI with glassmorphic design, dark/light
+     theming, custom scrollbars, and full ARIA screen-reader support.
+
+  •  Robust security architecture with process isolation, context
+     isolation, PKCE OAuth, encrypted token storage, and input validation.
+
+  •  Cross-platform distribution support for Windows, macOS, and Linux.
+
+  The project serves as both a practical tool and a comprehensive case
+  study in modern desktop application development with web technologies.
+
+================================================================================
+  END OF REPORT
+================================================================================

@@ -10,7 +10,6 @@ import ReadingListPage from "./ReadingListPage";
 import ReaderPage from "./ReaderPage";
 import DownloadsPage from "./DownloadsPage";
 import ExtensionsPage from "./ExtensionsPage";
-import ExtensionStorePage from "./ExtensionStorePage";
 import SettingsPage from "./SettingsPage";
 
 function TabWebview({ tab, isActive, onFocus, styleClass }) {
@@ -114,11 +113,9 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       // If the container has no size yet, don't update bounds
       if (rect.width === 0 || rect.height === 0) return;
       
-      const isHidden = dropdownOffset > 0 && screenshotUrl;
-      
       window.electron.tabManager.updateBounds({
         tabId: tab.id,
-        bounds: isHidden ? { x: -10000, y: -10000, width: 0, height: 0 } : { 
+        bounds: { 
           x: Math.round(rect.x), 
           y: Math.round(rect.y), 
           width: Math.round(rect.width), 
@@ -138,24 +135,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       clearTimeout(timer);
       resizeObserver.disconnect();
     };
-  }, [tab.id, isActive, styleClass, dropdownOffset, screenshotUrl]);
-
-  useEffect(() => {
-    let active = true;
-    if (dropdownOffset > 0 && window.electron?.tabManager?.capturePage) {
-      window.electron.tabManager.capturePage(tab.id).then(url => {
-        if (url && isMounted.current && active) {
-          setScreenshotUrl(url);
-        }
-      });
-    } else if (dropdownOffset === 0) {
-      // Clear it via a microtask to avoid React's synchronous effect cascade warning
-      Promise.resolve().then(() => {
-        if (isMounted.current && active) setScreenshotUrl(null);
-      });
-    }
-    return () => { active = false; };
-  }, [dropdownOffset, tab.id, tab.zoomLevel]);
+  }, [tab.id, isActive, styleClass]);
 
   // 4. Remote Navigation
   useEffect(() => {
@@ -193,6 +173,13 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
     <div 
       className={`absolute ${styleClass ? styleClass : 'inset-0 w-full h-full'} ${isActive ? 'z-10' : 'z-0 pointer-events-none'}`}
       onClick={onFocus}
+      onMouseDown={() => {
+        // Transfer keyboard focus to the native WebContentsView so key events
+        // (e.g. 'F' for fullscreen, Space for pause) reach the page content
+        if (isActive && window.electron?.tabManager?.focusTab) {
+          window.electron.tabManager.focusTab(tab.id);
+        }
+      }}
     >
       {tab.error && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background text-foreground">
@@ -214,16 +201,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
         ref={containerRef}
         id={`webview-${tab.id}`}
         className={`w-full h-full border-none outline-none relative overflow-hidden ${tab.error ? 'opacity-0' : 'opacity-100'}`}
-      >
-        {screenshotUrl && dropdownOffset > 0 && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img 
-            src={screenshotUrl} 
-            alt="" 
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        )}
-      </div>
+      />
     </div>
   );
 }
@@ -361,18 +339,6 @@ export default function WebviewContainer() {
               className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
             >
               <ExtensionsPage />
-            </div>
-          );
-        }
-
-        if (tab.url === 'browser://extensions/store') {
-          return (
-            <div 
-              key={tab.id} 
-              onClick={handleClick}
-              className={`absolute ${styleClass} bg-background ${isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
-            >
-              <ExtensionStorePage />
             </div>
           );
         }

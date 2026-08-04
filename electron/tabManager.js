@@ -1,6 +1,7 @@
 const { WebContentsView, ipcMain, BrowserWindow, app } = require('electron');
 const profileManager = require('./profileManager');
 const { attachNavigationShields, attachCosmeticFilters } = require('./verseShield');
+const { showPopupWindow, closePopupWindow } = require('./popupManager');
 
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
@@ -110,6 +111,16 @@ function initTabManager() {
       if (errorCode !== -3) forwardEvent('did-fail-load', { errorCode, errorDescription });
     });
 
+    view.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      try {
+        const fs = require('fs');
+        const logPath = 'C:\\Users\\Admin\\.gemini\\antigravity-ide\\brain\\f834f673-3d34-41ac-823e-7cce8eea0470\\scratch\\tab_console.log';
+        fs.appendFileSync(logPath, `[Tab ${tabId}] ${message}\n`);
+      } catch (e) {}
+    });
+
+    views.set(tabId, view);
+
     // Handle new window opens (target="_blank" or window.open)
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       // Allow Google Auth popups to open natively so they inherit the correct session and UA
@@ -146,6 +157,8 @@ function initTabManager() {
         matches: result.matches
       });
     });
+
+
 
 
     if (url) {
@@ -187,35 +200,7 @@ function initTabManager() {
     openGoogleAuthPopup(activeView, partition);
   });
 
-  ipcMain.on('set-force-dark', (event, enabled) => {
-    globalForceDarkEnabled = enabled;
-    for (const view of views.values()) {
-      applyForceDarkToView(view, enabled);
-    }
-  });
 
-  function applyForceDarkToView(view, enabled, pendingUrl = null) {
-    if (!view || view.webContents.isDestroyed()) return;
-    try {
-      const url = pendingUrl || view.webContents.getURL();
-      // Google detects the CDP debugger attachment as "webdriver" and blocks sign-ins
-      const isGoogleAuth = url.startsWith('https://accounts.google.com') || url.startsWith('https://myaccount.google.com');
-
-      if (enabled && !isGoogleAuth) {
-        if (!view.webContents.debugger.isAttached()) {
-          view.webContents.debugger.attach('1.3');
-        }
-        view.webContents.debugger.sendCommand('Emulation.setAutoDarkModeOverride', { enabled: true }).catch(() => {});
-      } else {
-        if (view.webContents.debugger.isAttached()) {
-          view.webContents.debugger.sendCommand('Emulation.setAutoDarkModeOverride', { enabled: false }).catch(() => {});
-          view.webContents.debugger.detach();
-        }
-      }
-    } catch (err) {
-      console.error('Failed to apply force dark mode:', err);
-    }
-  }
 
   ipcMain.on('tab-destroy', (event, tabId) => {
     const view = views.get(tabId);
@@ -246,6 +231,12 @@ function initTabManager() {
         if (!isAttached) {
           window.contentView.addChildView(view);
           view._isAttached = true;
+
+          // Give the WebContentsView keyboard focus when a tab transitions to active
+          // so key events (e.g. 'F' for fullscreen on YouTube) reach the page
+          if (!view.webContents.isDestroyed()) {
+            view.webContents.focus();
+          }
         }
         // If already attached, we do NOT remove and re-add it.
         // Doing so breaks the Chromium rendering pipeline on Windows (freezing repaints, e.g. for zooming).
@@ -254,6 +245,14 @@ function initTabManager() {
         try { window.contentView.removeChildView(view); } catch(e) {}
         view._isAttached = false;
       }
+    }
+  });
+
+  // Explicit focus request — called when the user clicks into the webview area
+  ipcMain.on('tab-focus', (event, tabId) => {
+    const view = views.get(tabId);
+    if (view && !view.webContents.isDestroyed()) {
+      view.webContents.focus();
     }
   });
 
@@ -403,16 +402,7 @@ function initTabManager() {
     }
   });
 
-  ipcMain.handle('tab-execute-javascript', async (event, { tabId, code }) => {
-    const view = views.get(tabId);
-    if (!view || view.webContents.isDestroyed()) return null;
-    try {
-      return await view.webContents.executeJavaScript(code);
-    } catch (e) {
-      console.warn(`[tabManager] executeJavaScript failed for tab ${tabId}:`, e.message);
-      return null;
-    }
-  });
+
 
   ipcMain.handle('tab-capture-page', async (event, tabId) => {
     const view = views.get(tabId);
@@ -423,6 +413,25 @@ function initTabManager() {
     } catch (e) {
       console.error('Failed to capture page:', e);
       return null;
+    }
+  });
+
+  ipcMain.on('open-popup', (event, { url, width, height, x, y }) => {
+    const parentWin = BrowserWindow.fromWebContents(event.sender);
+    const profileId = parentWin ? parentWin._profileId : 'main';
+    const isIncognito = parentWin ? parentWin._isIncognito : false;
+    const partition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
+    showPopupWindow({ parentWin, url, width, height, x, y, partition });
+  });
+
+  ipcMain.on('close-popup', () => {
+    closePopupWindow();
+  });
+
+  ipcMain.on('open-new-tab', (event, { url }) => {
+    const mainWin = BrowserWindow.getAllWindows().find(w => !w.getParentWindow() && !w.isDestroyed() && w.isVisible());
+    if (mainWin) {
+      mainWin.webContents.send('tab-event', { action: 'open-tab', url: url || 'browser://extensions' });
     }
   });
 }

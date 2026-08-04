@@ -1,90 +1,175 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from "zustand/react/shallow";
+import { Search, Pin, Puzzle, Filter } from "lucide-react";
+
+const CATEGORIES = ["All", "Design", "Accessibility", "Media", "Privacy", "Productivity"];
+
+const CATEGORY_COLORS = {
+  Design: { bg: "bg-pink-500/10", text: "text-pink-400", border: "border-pink-500/20" },
+  Accessibility: { bg: "bg-indigo-500/10", text: "text-indigo-400", border: "border-indigo-500/20" },
+  Media: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
+  Privacy: { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
+  Productivity: { bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20" },
+};
 
 export default function ExtensionsPage() {
-  const { installedExtensions, toggleExtension, uninstallExtension, openExtensionStoreTab } = useBrowserStore(
+  const { installedExtensions, toggleExtension, togglePinExtension } = useBrowserStore(
     useShallow((state) => ({
       installedExtensions: state.installedExtensions,
       toggleExtension: state.toggleExtension,
-      uninstallExtension: state.uninstallExtension,
-      openExtensionStoreTab: state.openExtensionStoreTab,
+      togglePinExtension: state.togglePinExtension,
     }))
   );
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  const filteredExtensions = useMemo(() => {
+    return (installedExtensions || []).filter(ext => {
+      const matchesSearch = !searchQuery || 
+        ext.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ext.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = activeCategory === "All" || ext.category === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [installedExtensions, searchQuery, activeCategory]);
+
+  const enabledCount = (installedExtensions || []).filter(e => e.isEnabled).length;
+  const totalCount = (installedExtensions || []).length;
+
   return (
-    <div className="w-full h-full bg-background text-foreground overflow-y-auto p-8 flex flex-col items-center">
-      <div className="max-w-4xl w-full">
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-border">
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19.07 4.93a10 10 0 0 0-14.14 0l1.42 1.41a8 8 0 1 1 11.3 11.31l1.42 1.42a10 10 0 0 0 0-14.14z"></path>
-              <path d="m8 16 1.41-1.41"></path>
-              <path d="m14 10 1.41-1.41"></path>
-              <path d="m16 8 1.41-1.41"></path>
-              <path d="m10 14 1.41-1.41"></path>
-            </svg>
-            Extensions
-          </h1>
-          <button 
-            onClick={openExtensionStoreTab}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium flex items-center gap-2"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M5 12h14"></path>
-              <path d="M12 5v14"></path>
-            </svg>
-            Explore More Extensions
-          </button>
+    <div className="w-full h-full bg-background text-foreground overflow-y-auto custom-scrollbar">
+      <div className="max-w-5xl mx-auto px-8 py-10">
+        
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20 flex items-center justify-center">
+              <Puzzle size={24} className="text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Extensions</h1>
+              <p className="text-sm text-foreground/50">
+                {enabledCount} of {totalCount} extensions enabled
+              </p>
+            </div>
+          </div>
+          <p className="text-foreground/60 text-sm max-w-xl leading-relaxed">
+            Manage Verse Browser&apos;s built-in extensions. Enable powerful native features to enhance your browsing experience.
+          </p>
         </div>
 
-        {installedExtensions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <svg className="text-gray-500 mb-4" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-            </svg>
-            <h2 className="text-xl font-medium text-foreground/80 mb-2">No extensions installed</h2>
-            <p className="text-gray-500 mb-6">Enhance your browser with powerful native features.</p>
-            <button 
-              onClick={openExtensionStoreTab}
-              className="px-6 py-2.5 bg-surface hover:bg-surface-hover text-foreground border border-border rounded-md transition-colors"
-            >
-              Open Extension Store
-            </button>
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+          <div className="relative flex-1 w-full sm:max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search extensions..."
+              className="w-full pl-9 pr-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-foreground placeholder:text-foreground/40 outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Filter size={14} className="text-foreground/40 mr-1 hidden sm:block" />
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeCategory === cat
+                    ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                    : "bg-surface border border-border text-foreground/60 hover:text-foreground hover:border-foreground/20"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Extensions Grid */}
+        {filteredExtensions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-foreground/40">
+            <Puzzle size={48} className="mb-4 opacity-30" />
+            <p className="text-sm font-medium">No extensions found</p>
+            <p className="text-xs mt-1">Try adjusting your search or filter</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {installedExtensions.map(ext => (
-              <div key={ext.id} className={`bg-surface border ${ext.isEnabled ? 'border-border' : 'border-border opacity-60'} rounded-lg p-5 flex flex-col transition-all`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="text-3xl">{ext.icon || "🧩"}</div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={ext.isEnabled} 
-                      onChange={() => toggleExtension(ext.id)} 
-                    />
-                    <div className="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
+            {filteredExtensions.map(ext => {
+              const catColor = CATEGORY_COLORS[ext.category] || CATEGORY_COLORS.Design;
+              
+              return (
+                <div
+                  key={ext.id}
+                  className={`group relative bg-surface border rounded-2xl p-5 flex flex-col transition-all duration-200 hover:shadow-lg hover:shadow-black/5 ${
+                    ext.isEnabled 
+                      ? "border-border hover:border-foreground/20" 
+                      : "border-border/60 opacity-70 hover:opacity-90"
+                  }`}
+                >
+                  {/* Top Row: Icon + Toggle */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl ${catColor.bg} border ${catColor.border} transition-transform group-hover:scale-105`}>
+                      {ext.icon || "🧩"}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => togglePinExtension(ext.id)}
+                        title={ext.isPinned ? "Unpin from toolbar" : "Pin to toolbar"}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          ext.isPinned
+                            ? "text-blue-500 bg-blue-500/10 hover:bg-blue-500/20"
+                            : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        <Pin size={14} fill={ext.isPinned ? "currentColor" : "none"} />
+                      </button>
+                      <label className="relative inline-flex items-center cursor-pointer" title={ext.isEnabled ? "Disable" : "Enable"}>
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={ext.isEnabled}
+                          onChange={() => toggleExtension(ext.id)}
+                        />
+                        <div className="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Name & Description */}
+                  <h3 className="text-base font-semibold mb-1.5 text-foreground truncate">{ext.name}</h3>
+                  <p className="text-foreground/55 text-sm leading-relaxed grow mb-4">{ext.description}</p>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
+                    <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${catColor.bg} ${catColor.text} ${catColor.border} border`}>
+                      {ext.category}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {ext.isPinned && (
+                        <span className="text-[10px] text-blue-400/70 font-medium flex items-center gap-0.5">
+                          <Pin size={10} fill="currentColor" /> Pinned
+                        </span>
+                      )}
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        ext.isEnabled 
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                          : "bg-surface-hover text-foreground/40"
+                      }`}>
+                        {ext.isEnabled ? "Active" : "Off"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold mb-1 truncate">{ext.name}</h3>
-                <p className="text-foreground/70 mb-4 grow text-sm leading-relaxed">{ext.description}</p>
-                <div className="flex justify-between items-center mt-auto pt-4 border-t border-border">
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${ext.isEnabled ? 'bg-blue-900/30 text-blue-400' : 'bg-surface-hover text-foreground/70'}`}>
-                    {ext.isEnabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                  <button 
-                    onClick={() => uninstallExtension(ext.id)}
-                    className="text-xs text-red-400 hover:text-red-300 hover:underline px-2 py-1"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

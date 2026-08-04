@@ -49,7 +49,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@ghostery/adblocker-electron": "^2.18.1",
     "@mozilla/readability": "^0.6.0",
-    "@tailwindcss/typography": "^0.5.20",
     "axios": "^1.18.1",
     "clsx": "^2.1.1",
     "cross-fetch": "^4.1.0",
