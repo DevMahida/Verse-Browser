@@ -1,7 +1,9 @@
 const { WebContentsView, ipcMain, BrowserWindow, app } = require('electron');
 const profileManager = require('./profileManager');
 const { attachNavigationShields, attachCosmeticFilters } = require('./verseShield');
-const { showPopupWindow, closePopupWindow } = require('./popupManager');
+const { showPopupWindow, closePopupWindow, initSuggestionsPopup, showSuggestionsPopup, hideSuggestionsPopup, resizeSuggestionsPopup, sendSuggestionsUpdate } = require('./popupManager');
+const path = require('path');
+const isDev = !app.isPackaged;
 
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
@@ -9,9 +11,9 @@ let globalForceDarkEnabled = false;
 
 const isGoogleAuthUrl = (url) => {
   if (!url) return false;
-  return url.includes('accounts.google.com') && 
-         !url.includes('myaccount.google.com') && 
-         !url.includes('SignOutOptions');
+  return url.includes('accounts.google.com') &&
+    !url.includes('myaccount.google.com') &&
+    !url.includes('SignOutOptions');
 };
 
 
@@ -21,7 +23,7 @@ const checkCanGoForward = (wc) => (wc?.navigationHistory ? wc.navigationHistory.
 function initTabManager() {
   if (isInitialized) return;
   isInitialized = true;
-  
+
   ipcMain.on('tab-create', (event, { tabId, url }) => {
     if (views.has(tabId)) return;
 
@@ -30,9 +32,9 @@ function initTabManager() {
     const profileId = win ? win._profileId : 'main';
     const isIncognito = win ? win._isIncognito : false;
     const finalPartition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
-    
+
     console.log(`[TabManager] tab-create ${tabId} url:${url} partition:${finalPartition}`);
-    
+
     const view = new WebContentsView({
       webPreferences: {
         partition: finalPartition,
@@ -53,7 +55,7 @@ function initTabManager() {
     attachNavigationShields(view.webContents, tabId);
     // Attach cosmetic filters and scriptlets (e.g. YouTube Ad Skipper)
     attachCosmeticFilters(view.webContents);
-    
+
     // Setup event forwarding bound specifically to the window that requested this tab
     const forwardEvent = (eventName, data = {}) => {
       if (!sender.isDestroyed()) {
@@ -84,7 +86,7 @@ function initTabManager() {
         displayUrl = `view-source:${target}`;
       }
       forwardEvent('did-navigate', { url: displayUrl, canGoBack: checkCanGoBack(view.webContents), canGoForward: checkCanGoForward(view.webContents) });
-      
+
       if (globalForceDarkEnabled) {
         applyForceDarkToView(view, true, navigationUrl);
       }
@@ -116,7 +118,7 @@ function initTabManager() {
         const fs = require('fs');
         const logPath = 'C:\\Users\\Admin\\.gemini\\antigravity-ide\\brain\\f834f673-3d34-41ac-823e-7cce8eea0470\\scratch\\tab_console.log';
         fs.appendFileSync(logPath, `[Tab ${tabId}] ${message}\n`);
-      } catch (e) {}
+      } catch (e) { }
     });
 
     views.set(tabId, view);
@@ -127,7 +129,7 @@ function initTabManager() {
       if (isGoogleAuthUrl(url)) {
         return { action: 'allow' };
       }
-      
+
       // Alt+Click natively triggers save-to-disk
       if (disposition === 'save-to-disk') {
         view.webContents.downloadURL(url);
@@ -171,12 +173,12 @@ function initTabManager() {
             .then(res => res.text())
             .then(text => view.webContents.executeJavaScript(`window.receiveSource(${JSON.stringify(text)})`))
             .catch(err => view.webContents.executeJavaScript(`window.showError(${JSON.stringify(err.message)})`));
-        }).catch(() => {});
+        }).catch(() => { });
       } else {
-        view.webContents.loadURL(url).catch(() => {});
+        view.webContents.loadURL(url).catch(() => { });
       }
     }
-    
+
     // Apply Force Dark if globally enabled
     if (globalForceDarkEnabled) {
       applyForceDarkToView(view, true);
@@ -190,13 +192,13 @@ function initTabManager() {
     const profileId = win ? win._profileId : 'main';
     const isIncognito = win ? win._isIncognito : false;
     const partition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
-    
+
     // Find the active tab view to navigate after sign-in, or pass null
     const activeView = [...views.values()].find(v => {
       const parentWin = BrowserWindow.getAllWindows().find(w => w.contentView && w.contentView.children && w.contentView.children.includes(v));
       return parentWin === win;
     }) || null;
-    
+
     openGoogleAuthPopup(activeView, partition);
   });
 
@@ -207,7 +209,7 @@ function initTabManager() {
     if (view) {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (window && !window.isDestroyed() && view._isAttached) {
-        try { window.contentView.removeChildView(view); } catch (e) {}
+        try { window.contentView.removeChildView(view); } catch (e) { }
         view._isAttached = false;
       }
       if (!view.webContents.isDestroyed()) {
@@ -218,15 +220,15 @@ function initTabManager() {
   });
 
   ipcMain.on('tab-update-bounds', (event, { tabId, bounds, isActive }) => {
-    
+
     const view = views.get(tabId);
     const window = BrowserWindow.fromWebContents(event.sender);
-    
+
     if (view && window && !window.isDestroyed()) {
       view.setBounds(bounds);
-      
+
       const isAttached = view._isAttached;
-      
+
       if (isActive) {
         if (!isAttached) {
           window.contentView.addChildView(view);
@@ -242,7 +244,7 @@ function initTabManager() {
         // Doing so breaks the Chromium rendering pipeline on Windows (freezing repaints, e.g. for zooming).
         // Since inactive tabs are detached, an attached tab is already guaranteed to be visible.
       } else if (!isActive && isAttached) {
-        try { window.contentView.removeChildView(view); } catch(e) {}
+        try { window.contentView.removeChildView(view); } catch (e) { }
         view._isAttached = false;
       }
     }
@@ -258,7 +260,7 @@ function initTabManager() {
 
   ipcMain.on('tab-navigate', (event, { tabId, url }) => {
     console.log(`[TabManager] tab-navigate ${tabId} url:${url}`);
-    
+
     const view = views.get(tabId);
     if (view && url) {
       if (url.startsWith('view-source:')) {
@@ -271,11 +273,11 @@ function initTabManager() {
             .then(res => res.text())
             .then(text => view.webContents.executeJavaScript(`window.receiveSource(${JSON.stringify(text)})`))
             .catch(err => view.webContents.executeJavaScript(`window.showError(${JSON.stringify(err.message)})`));
-        }).catch(() => {});
+        }).catch(() => { });
       } else {
-        view.webContents.loadURL(url).catch(() => {});
+        view.webContents.loadURL(url).catch(() => { });
       }
-      
+
       if (globalForceDarkEnabled) {
         applyForceDarkToView(view, true);
       }
@@ -441,9 +443,41 @@ function initTabManager() {
   });
 
   ipcMain.on('resize-popup', (event, { width, height }) => {
-    console.log(`[IPC] resize-popup called with width=${width}, height=${height}`);
+    // console.log(`[IPC] resize-popup called with width=${width}, height=${height}`);
     const { resizePopupWindow } = require('./popupManager');
     resizePopupWindow(width, height);
+  });
+
+  ipcMain.on('show-suggestions-popup', (event, { x, y, width, height }) => {
+    const parentWin = BrowserWindow.fromWebContents(event.sender);
+    const profileId = parentWin ? parentWin._profileId : 'main';
+    const isIncognito = parentWin ? parentWin._isIncognito : false;
+    const partition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
+    
+    const baseUrl = isDev ? 'http://localhost:3000' : `file://${path.join(__dirname, '..', 'out', 'index.html')}`;
+    
+    initSuggestionsPopup(parentWin, partition, isDev ? baseUrl : 'http://localhost:3000'); // Note: For statically exported Next.js, loading the URL may require special routing if not dev, but Verse runs Next.js server usually. Assuming baseUrl is fine. Wait, let's just use the same logic as open-popup.
+    
+    showSuggestionsPopup(x, y, width, height);
+  });
+
+  ipcMain.on('hide-suggestions-popup', () => {
+    hideSuggestionsPopup();
+  });
+
+  ipcMain.on('update-suggestions', (event, { suggestions, selectedIndex }) => {
+    sendSuggestionsUpdate(suggestions, selectedIndex);
+  });
+
+  ipcMain.on('resize-suggestions-popup', (event, { width, height }) => {
+    resizeSuggestionsPopup(width, height);
+  });
+
+  ipcMain.on('suggestions-select', (event, suggestion) => {
+    const mainWin = BrowserWindow.getAllWindows().find(w => !w.getParentWindow() && !w.isDestroyed() && w.isVisible());
+    if (mainWin) {
+      mainWin.webContents.send('suggestions:selected', suggestion);
+    }
   });
 
   ipcMain.on('open-new-tab', (event, { url }) => {

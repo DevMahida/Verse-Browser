@@ -82,6 +82,26 @@ contextBridge.exposeInMainWorld("electron", {
     openPopup: (data) => ipcRenderer.send('open-popup', data),
     closePopup: () => ipcRenderer.send('close-popup'),
     resizePopup: (data) => ipcRenderer.send('resize-popup', data),
+    showSuggestionsPopup: (data) => ipcRenderer.send('show-suggestions-popup', data),
+    hideSuggestionsPopup: () => ipcRenderer.send('hide-suggestions-popup'),
+    resizeSuggestionsPopup: (data) => ipcRenderer.send('resize-suggestions-popup', data),
+    updateSuggestions: (data) => ipcRenderer.send('update-suggestions', data),
+    onSuggestionsBlur: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('suggestions:blur', handler);
+      return () => ipcRenderer.removeListener('suggestions:blur', handler);
+    },
+    onSuggestionsUpdate: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('suggestions:update', handler);
+      return () => ipcRenderer.removeListener('suggestions:update', handler);
+    },
+    selectSuggestion: (suggestion) => ipcRenderer.send('suggestions-select', suggestion),
+    onSuggestionSelected: (callback) => {
+      const handler = (_event, suggestion) => callback(suggestion);
+      ipcRenderer.on('suggestions:selected', handler);
+      return () => ipcRenderer.removeListener('suggestions:selected', handler);
+    },
     openNewTab: (data) => ipcRenderer.send('open-new-tab', data),
     executeJavaScript: (data) => ipcRenderer.invoke('tab-execute-js', data),
     onTabEvent: (callback) => {
@@ -94,6 +114,7 @@ contextBridge.exposeInMainWorld("electron", {
       getStatus: (data) => ipcRenderer.invoke('shield:getStatus', data),
       setForSite: (hostname, enabled) => ipcRenderer.invoke('shield:setForSite', hostname, enabled),
       setGlobal: (enabled) => ipcRenderer.invoke('shield:setGlobal', enabled),
+      setSetting: (hostname, key, value) => ipcRenderer.invoke('shield:setSetting', hostname, key, value),
     },
     onAdBlockerStatUpdate: (callback) => {
       const handler = (_event, data) => callback(data);

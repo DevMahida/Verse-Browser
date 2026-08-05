@@ -18,14 +18,19 @@ export function useSearchSuggestions(query, delay = 250) {
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(trimmed)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && Array.isArray(data[1])) {
-            setSuggestions(data[1].slice(0, 6));
-          } else {
-            setSuggestions([]);
-          }
+        const targetUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(trimmed)}`;
+        let data = null;
+        
+        if (window.electron?.tabManager?.fetchSource) {
+          const text = await window.electron.tabManager.fetchSource({ url: targetUrl });
+          data = JSON.parse(text);
+        } else {
+          const res = await fetch(targetUrl);
+          if (res.ok) data = await res.json();
+        }
+
+        if (data && Array.isArray(data) && Array.isArray(data[1])) {
+          setSuggestions(data[1].slice(0, 6));
         } else {
           setSuggestions([]);
         }

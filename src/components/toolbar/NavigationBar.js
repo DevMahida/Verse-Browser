@@ -59,6 +59,7 @@ export default function NavigationBar() {
   const zoomPercentage = Math.round(Math.pow(1.2, zoomLevel) * 100);
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
   const [showShieldPopup, setShowShieldPopup] = useState(false);
   const [shieldBlockedCount, setShieldBlockedCount] = useState(0);
@@ -81,6 +82,58 @@ export default function NavigationBar() {
   });
   const prevCompletedCount = useRef(0);
   const { suggestions } = useSearchSuggestions(inputValue);
+  
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [suggestions]);
+  
+  useEffect(() => {
+    if (window.electron && window.electron.tabManager && window.electron.tabManager.showSuggestionsPopup) {
+      if (isFocused && suggestions.length > 0) {
+        // Calculate exact height: 45px per item + 16px padding (py-2) + 2px borders
+        const height = suggestions.length * 45 + 18;
+        
+        // Ensure inputRef is mounted
+        if (inputRef.current) {
+          const rect = inputRef.current.getBoundingClientRect();
+          window.electron.tabManager.showSuggestionsPopup({
+            x: Math.round(window.screenX + rect.left),
+            y: Math.round(window.screenY + rect.bottom + 8),
+            width: Math.round(rect.width),
+            height: Math.round(height)
+          });
+        }
+        
+        window.electron.tabManager.updateSuggestions({
+          suggestions,
+          selectedIndex
+        });
+      } else {
+        window.electron.tabManager.hideSuggestionsPopup();
+      }
+    }
+  }, [isFocused, suggestions, selectedIndex]);
+
+  useEffect(() => {
+    if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionSelected) {
+      const cleanup = window.electron.tabManager.onSuggestionSelected((suggestion) => {
+        setInputValue(suggestion);
+        navigate(activeTabId, suggestion);
+        setIsFocused(false);
+      });
+      return cleanup;
+    }
+  }, [navigate, activeTabId]);
+  
+  useEffect(() => {
+    if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionsBlur) {
+      const cleanup = window.electron.tabManager.onSuggestionsBlur(() => {
+        setIsFocused(false);
+      });
+      return cleanup;
+    }
+  }, []);
+  
   const overflowMenuRef = useRef(null);
   const inputRef = useRef(null);
   const historyRef = useRef(null);
@@ -136,10 +189,9 @@ export default function NavigationBar() {
     else if (showProfileMenu) offset = 500;
     else if (showZoomPopup) offset = 200;
     else if (showExtensionsPopup) offset = 300;
-    else if (isFocused && suggestions.length > 0) offset = Math.min(suggestions.length * 40 + 16, 250);
 
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, showExtensionsPopup, isFocused, suggestions.length, setDropdownOffset]);
+  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, showExtensionsPopup, setDropdownOffset]);
 
   useEffect(() => {
     if (!downloads) return;
@@ -290,8 +342,14 @@ export default function NavigationBar() {
   const canReadMode = activeTab && activeTab.url.startsWith('http') && !activeTab.url.startsWith('browser://reader');
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && inputValue.trim() !== '') {
-      let targetUrl = inputValue.trim();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > -1 ? prev - 1 : prev));
+    } else if (e.key === 'Enter' && inputValue.trim() !== '') {
+      let targetUrl = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue.trim();
 
       // Ctrl+Enter autocomplete (add www. and .com)
       if ((e.ctrlKey || e.metaKey) && !targetUrl.includes('.') && !targetUrl.includes(' ') && !targetUrl.startsWith('verse://')) {
@@ -304,6 +362,8 @@ export default function NavigationBar() {
       }
       navigate(activePaneTabId, targetUrl);
       setIsFocused(false);
+      setSelectedIndex(-1);
+      e.target?.blur?.();
     }
   };
 
@@ -411,8 +471,11 @@ export default function NavigationBar() {
           <input
             ref={inputRef}
             type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setSelectedIndex(-1);
+            }}
             aria-label="Address and search bar"
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
@@ -550,17 +613,6 @@ export default function NavigationBar() {
             )}
           </div>
         </div>
-        {isFocused && suggestions.length > 0 && (
-          <SuggestionsDropdown
-            suggestions={suggestions}
-            onSelect={(suggestion) => {
-              setInputValue(suggestion);
-              navigate(activeTabId, suggestion);
-              setIsFocused(false);
-            }}
-            className="top-full mt-2 left-0 w-full"
-          />
-        )}
       </div>
 
       {/* Extensions & Tools */}

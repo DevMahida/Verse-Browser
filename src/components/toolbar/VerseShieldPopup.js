@@ -63,7 +63,10 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose, is
       window.electron.tabManager.shield.getStatus({ hostname, tabId }).then((res) => {
         if (res) {
           setShieldEnabled(res.enabled);
-          setStats({ ...res.counts, httpUpgrades: 0 });
+          setStats({ ...res.counts });
+          if (res.settings) {
+            setSiteSettings(prev => ({ ...prev, ...res.settings }));
+          }
         }
       }).catch(() => {});
     }
@@ -159,7 +162,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose, is
       ref={popupRef}
       className={clsx(
         "bg-surface/95 backdrop-blur-xl border border-border shadow-2xl overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150",
-        !isStandalone ? "absolute top-9 -left-60 w-[320px] rounded-xl z-50" : "w-full h-max rounded-none"
+        !isStandalone ? "absolute top-9 -left-60 w-[320px] rounded-xl z-50" : "w-full rounded-none"
       )}
     >
       {/* ─── Header: Domain + Shield Toggle ─── */}

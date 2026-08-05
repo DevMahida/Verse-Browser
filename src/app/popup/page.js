@@ -10,6 +10,7 @@ import ZoomPopup from '@/components/toolbar/ZoomPopup';
 import VerseShieldPopup from '@/components/toolbar/VerseShieldPopup';
 import ProfileMenu from '@/components/toolbar/ProfileMenu';
 import SiteSettingsPopup from '@/components/toolbar/SiteSettingsPopup';
+import SuggestionsPopup from '@/components/toolbar/SuggestionsPopup';
 
 function PopupContent() {
   const searchParams = useSearchParams();
@@ -32,6 +33,7 @@ function PopupContent() {
       {type === 'shield' && <VerseShieldPopup url={url} tabId={tabId} onClose={handleClose} isStandalone />}
       {type === 'profile' && <ProfileMenu onClose={handleClose} isStandalone />}
       {type === 'sitesettings' && <SiteSettingsPopup url={url} tabId={tabId} onClose={handleClose} isStandalone />}
+      {type === 'suggestions' && <SuggestionsPopup />}
     </div>
   );
 }

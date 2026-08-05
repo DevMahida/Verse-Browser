@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Sparkles } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
@@ -11,7 +11,12 @@ export default function HeroSection() {
   const { activeTabId, navigate, currentUser } = useBrowserStore();
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const { suggestions } = useSearchSuggestions(inputValue);
+
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [suggestions]);
 
   const handleSearch = (queryOrEvent) => {
     const q = typeof queryOrEvent === 'string' ? queryOrEvent : inputValue;
@@ -31,8 +36,17 @@ export default function HeroSection() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch(inputValue);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > -1 ? prev - 1 : prev));
+    } else if (e.key === 'Enter') {
+      const q = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue;
+      handleSearch(q);
+      setSelectedIndex(-1);
+      e.target?.blur?.();
     }
   };
 
@@ -78,8 +92,11 @@ export default function HeroSection() {
           <Search className="text-foreground/70 mr-3 w-5 h-5" />
           <input
             type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setSelectedIndex(-1);
+            }}
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
@@ -97,6 +114,7 @@ export default function HeroSection() {
         {isFocused && suggestions.length > 0 && (
           <SuggestionsDropdown
             suggestions={suggestions}
+            selectedIndex={selectedIndex}
             onSelect={(suggestion) => {
               setInputValue(suggestion);
               handleSearch(suggestion);

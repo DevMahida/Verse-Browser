@@ -67,7 +67,7 @@ function closePopupWindow() {
   if (activePopupWindow && !activePopupWindow.isDestroyed()) {
     try {
       activePopupWindow.close();
-    } catch (e) {}
+    } catch (e) { }
   }
   activePopupWindow = null;
 }
@@ -77,12 +77,104 @@ function closePopupWindow() {
  */
 function resizePopupWindow(width, height) {
   if (activePopupWindow && !activePopupWindow.isDestroyed()) {
-    activePopupWindow.setSize(Math.round(width), Math.round(height));
+    const bounds = activePopupWindow.getBounds();
+    activePopupWindow.setBounds({
+      x: bounds.x,
+      y: bounds.y,
+      width: Math.round(width),
+      height: Math.round(height)
+    });
+  }
+}
+
+let suggestionsPopupWindow = null;
+
+let lastSuggestions = [];
+let lastSelectedIndex = -1;
+
+function initSuggestionsPopup(parentWin, partition, baseUrl) {
+  if (suggestionsPopupWindow && !suggestionsPopupWindow.isDestroyed()) return;
+
+  suggestionsPopupWindow = new BrowserWindow({
+    parent: parentWin,
+    width: 600,
+    height: 300,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      ...(partition ? { partition } : {})
+    }
+  });
+
+  suggestionsPopupWindow.loadURL(`${baseUrl}/popup?type=suggestions`);
+
+  suggestionsPopupWindow.webContents.on('did-finish-load', () => {
+    if (lastSuggestions && lastSuggestions.length > 0) {
+      suggestionsPopupWindow.webContents.send('suggestions:update', { suggestions: lastSuggestions, selectedIndex: lastSelectedIndex });
+    }
+  });
+
+  suggestionsPopupWindow.on('blur', () => {
+    hideSuggestionsPopup();
+    if (!parentWin.isDestroyed()) {
+      parentWin.webContents.send('suggestions:blur');
+    }
+  });
+}
+
+function showSuggestionsPopup(x, y, width, height) {
+  if (suggestionsPopupWindow && !suggestionsPopupWindow.isDestroyed()) {
+    suggestionsPopupWindow.setBounds({
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height)
+    });
+    if (!suggestionsPopupWindow.isVisible()) {
+      suggestionsPopupWindow.showInactive(); // Do not steal focus from the main window's input!
+    }
+  }
+}
+
+function hideSuggestionsPopup() {
+  if (suggestionsPopupWindow && !suggestionsPopupWindow.isDestroyed()) {
+    suggestionsPopupWindow.hide();
+  }
+}
+
+function resizeSuggestionsPopup(width, height) {
+  if (suggestionsPopupWindow && !suggestionsPopupWindow.isDestroyed()) {
+    const bounds = suggestionsPopupWindow.getBounds();
+    suggestionsPopupWindow.setBounds({
+      ...bounds,
+      width: Math.round(width),
+      height: Math.round(height)
+    });
+  }
+}
+
+function sendSuggestionsUpdate(suggestions, selectedIndex) {
+  lastSuggestions = suggestions || [];
+  lastSelectedIndex = selectedIndex ?? -1;
+  if (suggestionsPopupWindow && !suggestionsPopupWindow.isDestroyed()) {
+    suggestionsPopupWindow.webContents.send('suggestions:update', { suggestions: lastSuggestions, selectedIndex: lastSelectedIndex });
   }
 }
 
 module.exports = {
   showPopupWindow,
   closePopupWindow,
-  resizePopupWindow
+  resizePopupWindow,
+  initSuggestionsPopup,
+  showSuggestionsPopup,
+  hideSuggestionsPopup,
+  resizeSuggestionsPopup,
+  sendSuggestionsUpdate
 };

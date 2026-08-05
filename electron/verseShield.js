@@ -12,12 +12,26 @@ let blockerEventsAttached = false;
 const activeSessions = new Set();
 const blockedCounts = new Map(); // Verse tab ID -> { ads, trackers, fingerprints }
 
-function emptyCounts() { return { ads: 0, trackers: 0, fingerprints: 0 }; }
+function emptyCounts() { return { ads: 0, trackers: 0, fingerprints: 0, httpUpgrades: 0 }; }
 function loadSettings() {
-  try { return { globalEnabled: true, siteOverrides: {}, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; }
-  catch { return { globalEnabled: true, siteOverrides: {} }; }
+  try { return { globalEnabled: true, siteOverrides: {}, siteSettings: {}, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; }
+  catch { return { globalEnabled: true, siteOverrides: {}, siteSettings: {} }; }
 }
 function saveSettings(data) { fs.writeFileSync(settingsFile(), JSON.stringify(data, null, 2)); }
+function getSiteSetting(hostname, key, defaultValue) {
+  const { siteSettings } = loadSettings();
+  if (siteSettings && siteSettings[hostname] && siteSettings[hostname][key] !== undefined) {
+    return siteSettings[hostname][key];
+  }
+  return defaultValue;
+}
+function setSiteSetting(hostname, key, value) {
+  const settings = loadSettings();
+  if (!settings.siteSettings) settings.siteSettings = {};
+  if (!settings.siteSettings[hostname]) settings.siteSettings[hostname] = {};
+  settings.siteSettings[hostname][key] = value;
+  saveSettings(settings);
+}
 function isEnabledForHost(hostname) {
   const { globalEnabled, siteOverrides } = loadSettings();
   return Object.prototype.hasOwnProperty.call(siteOverrides, hostname) ? siteOverrides[hostname] : globalEnabled;
@@ -78,6 +92,7 @@ async function enableShieldsOnSession(targetSession) {
     const blocker = await getBlocker();
     attachBlockEvents(blocker);
     blocker.enableBlockingInSession(targetSession);
+    attachAdvancedSessionFilters(targetSession);
   } catch (err) {
     if (err.message && err.message.includes('Attempted to register a second handler')) {
       // IPC handler for cosmetic filters was already registered globally
@@ -85,6 +100,113 @@ async function enableShieldsOnSession(targetSession) {
       console.error('Failed to enable shields on session:', err);
     }
   }
+}
+
+function attachAdvancedSessionFilters(targetSession) {
+  let cachedSettings = loadSettings();
+  let lastLoadTime = Date.now();
+  
+  const getFastSettings = () => {
+    if (Date.now() - lastLoadTime > 2000) { // Reload every 2s max
+      cachedSettings = loadSettings();
+      lastLoadTime = Date.now();
+    }
+    return cachedSettings;
+  };
+  
+  const fastGetSetting = (hostname, key, defaultValue) => {
+    const s = getFastSettings();
+    if (s.siteSettings && s.siteSettings[hostname] && s.siteSettings[hostname][key] !== undefined) {
+      return s.siteSettings[hostname][key];
+    }
+    return defaultValue;
+  };
+  
+  const fastIsEnabled = (hostname) => {
+    const s = getFastSettings();
+    return Object.prototype.hasOwnProperty.call(s.siteOverrides || {}, hostname) ? s.siteOverrides[hostname] : (s.globalEnabled ?? true);
+  };
+
+  targetSession.webRequest.onBeforeRequest({ urls: ['http://*/*'] }, (details, callback) => {
+    try {
+      const url = new URL(details.url);
+      const host = url.hostname;
+      
+      // Skip local network, localhost, IPs
+      if (/^(localhost|127\.\d+\.\d+\.\d+|::1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(host)) {
+        return callback({ cancel: false });
+      }
+
+      const httpsUpgrade = fastGetSetting(host, 'httpsUpgrade', true);
+      const isShieldEnabled = fastIsEnabled(host);
+      
+      if (isShieldEnabled && httpsUpgrade) {
+        url.protocol = 'https:';
+        
+        // Update counts if we can find the tab
+        if (details.webContentsId) {
+          const wc = webContents.fromId(details.webContentsId);
+          if (wc && wc._verseTabId) {
+            const current = blockedCounts.get(wc._verseTabId) || emptyCounts();
+            const next = { ...current, httpUpgrades: (current.httpUpgrades || 0) + 1 };
+            blockedCounts.set(wc._verseTabId, next);
+            publish(wc._verseTabId, next);
+          }
+        }
+        
+        return callback({ redirectURL: url.toString() });
+      }
+    } catch(e) {}
+    callback({ cancel: false });
+  });
+
+  targetSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
+    let modified = false;
+    try {
+      const url = new URL(details.url);
+      const host = url.hostname;
+      if (fastIsEnabled(host)) {
+        const cookieLevel = fastGetSetting(host, 'cookieLevel', 'cross-site');
+        if (cookieLevel === 'all') {
+          if (details.requestHeaders['Cookie']) {
+            delete details.requestHeaders['Cookie'];
+            modified = true;
+          }
+        }
+      }
+    } catch(e) {}
+    if (modified) {
+      callback({ requestHeaders: details.requestHeaders });
+    } else {
+      callback({ cancel: false });
+    }
+  });
+
+  targetSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+    let modified = false;
+    try {
+      const url = new URL(details.url);
+      const host = url.hostname;
+      if (fastIsEnabled(host)) {
+        const cookieLevel = fastGetSetting(host, 'cookieLevel', 'cross-site');
+        if (cookieLevel === 'all') {
+          if (details.responseHeaders['Set-Cookie']) {
+            delete details.responseHeaders['Set-Cookie'];
+            modified = true;
+          }
+          if (details.responseHeaders['set-cookie']) {
+            delete details.responseHeaders['set-cookie'];
+            modified = true;
+          }
+        }
+      }
+    } catch(e) {}
+    if (modified) {
+      callback({ responseHeaders: details.responseHeaders });
+    } else {
+      callback({ cancel: false });
+    }
+  });
 }
 
 async function rebuildAndReapply() {
@@ -108,6 +230,51 @@ function attachNavigationShields(tabWebContents, tabId) {
   tabWebContents._verseTabId = tabId;
   tabWebContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
     if (isMainFrame) blockedCounts.set(tabId, emptyCounts());
+  });
+
+  tabWebContents.on('dom-ready', () => {
+    try {
+      const urlStr = tabWebContents.getURL();
+      if (!urlStr || urlStr.startsWith('browser://') || urlStr.startsWith('chrome://')) return;
+      const host = new URL(urlStr).hostname;
+      if (!isEnabledForHost(host)) return;
+      
+      const fpLevel = getSiteSetting(host, 'fingerprintLevel', 'standard');
+      if (fpLevel === 'aggressive') {
+        const spoofCode = `(() => {
+          try {
+            const originalGetContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function(type, contextAttributes) {
+              const context = originalGetContext.apply(this, arguments);
+              if (type === '2d' && context) {
+                const originalGetImageData = context.getImageData;
+                context.getImageData = function() {
+                  const imageData = originalGetImageData.apply(this, arguments);
+                  if (imageData && imageData.data) {
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                      imageData.data[i] = imageData.data[i] ^ 1; // flip LSB of red channel to poison hash
+                    }
+                  }
+                  return imageData;
+                };
+              }
+              return context;
+            };
+            
+            const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+              if (parameter === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+              if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+              return originalGetParameter.apply(this, arguments);
+            };
+            
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+          } catch(e) {}
+        })();`;
+        tabWebContents.executeJavaScript(spoofCode).catch(() => {});
+      }
+    } catch(e) {}
   });
 }
 
@@ -196,14 +363,29 @@ function attachCosmeticFilters(tabWebContents) {
   });
 }
 function registerShieldHandlers() {
-  ipcMain.handle('shield:getStatus', (_event, { hostname, tabId } = {}) => ({
-    hostname: hostname || null,
-    enabled: hostname ? isEnabledForHost(hostname) : true,
-    counts: blockedCounts.get(tabId) || emptyCounts(),
-  }));
+  ipcMain.handle('shield:getStatus', (_event, { hostname, tabId } = {}) => {
+    const defaultSettings = {
+      trackingLevel: 'standard',
+      fingerprintLevel: 'standard',
+      cookieLevel: 'cross-site',
+      httpsUpgrade: true
+    };
+    const siteSettings = hostname ? (loadSettings().siteSettings?.[hostname] || {}) : {};
+    
+    return {
+      hostname: hostname || null,
+      enabled: hostname ? isEnabledForHost(hostname) : true,
+      counts: blockedCounts.get(tabId) || emptyCounts(),
+      settings: { ...defaultSettings, ...siteSettings }
+    };
+  });
   ipcMain.handle('shield:setForSite', async (_event, hostname, enabled) => {
     setEnabledForHost(hostname, enabled);
     await rebuildAndReapply();
+    return { success: true };
+  });
+  ipcMain.handle('shield:setSetting', async (_event, hostname, key, value) => {
+    setSiteSetting(hostname, key, value);
     return { success: true };
   });
 }
