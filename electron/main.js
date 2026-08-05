@@ -774,100 +774,47 @@ app.whenReady().then(async () => {
     }
   });
 
-  // --- AI Assistant IPC Handlers ---
-  const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-  const DEFAULT_MODEL = 'meta-llama/llama-3.1-8b-instruct';
+  // --- AI Backend Proxy ---
+  const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://versr-ai-browser-verse.hf.space';
 
   ipcMain.handle('ai-request', async (event, payload) => {
     try {
       const { endpoint, payload: reqPayload } = payload || {};
-      const apiKey = (reqPayload && reqPayload.apiKey) || (payload && payload.apiKey) || process.env.OPENROUTER_API_KEY;
-      if (!apiKey || !apiKey.trim()) {
+      // API key: renderer-provided takes priority, then env variable
+      const apiKey = reqPayload?.apiKey || process.env.OPENROUTER_API_KEY;
+      if (!apiKey?.trim()) {
         return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEY in .env.local.' };
       }
-      const { text = '', html = '', query = '', title = '', url = '', selected_text = '', extraction_goal = '', platform = '', style = '', target_language = '' } = reqPayload;
 
-      const pageCtx = `Page Title: ${title || 'Unknown'}\nPage URL: ${url || 'Unknown'}`;
-      const contentSnippet = (text || '').substring(0, 12000);
-
-      let systemPrompt = 'You are a helpful AI assistant.';
-      let userContent = `${pageCtx}\n\nContent:\n${contentSnippet}\n\nQuery: ${query || 'Please help with this content.'}`;
-      let key = 'result';
-
-      switch (endpoint) {
-        case '/summarize':
-          systemPrompt = 'You are a helpful AI assistant that summarizes web page content concisely and clearly. Use markdown formatting with headers and bullet points.';
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease provide a clear, concise summary of this page.`;
-          break;
-        case '/explain':
-          systemPrompt = 'You are a helpful AI tutor that explains articles in simple, easy-to-understand language. Use analogies and plain English.';
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nPlease explain this article in simple terms.`;
-          break;
-        case '/key-points':
-          systemPrompt = 'You are a helpful assistant that extracts the most important key points from web content. Format as a numbered or bulleted markdown list.';
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nList the key points from this page.`;
-          break;
-        case '/faqs':
-          systemPrompt = 'You are a helpful assistant that generates frequently asked questions (FAQs) with answers based on web content. Format as markdown with bold questions.';
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nGenerate 5 relevant FAQs with answers based on this page.`;
-          key = 'faqs';
-          break;
-        case '/study-notes':
-          systemPrompt = 'You are a study assistant that creates detailed, well-structured study notes from web content. Use headers, bullet points, and highlight key terms.';
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate comprehensive study notes from this page.`;
-          break;
-        case '/extract':
-          systemPrompt = `You are a data extraction assistant. Extract all ${extraction_goal || 'relevant data'} from the provided content. Return them as a clean markdown list.`;
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nExtract all ${extraction_goal || 'relevant information'} from this page.`;
-          break;
-        case '/generate-post':
-          systemPrompt = `You are a social media content creator. Create an engaging ${platform || 'social media'} post based on the page content. Be concise, engaging, and use relevant hashtags if appropriate.`;
-          userContent = `${pageCtx}\n\nPage Content:\n${contentSnippet}\n\nCreate a ${platform || 'social media'} post about this page.`;
-          break;
-        case '/rewrite':
-          systemPrompt = `You are a writing assistant that rewrites content in a ${style || 'professional'} style. Maintain the original meaning while improving the tone and clarity.`;
-          userContent = `${pageCtx}\n\nContent to rewrite:\n${contentSnippet}\n\nRewrite this content in a ${style || 'professional'} style.`;
-          break;
-        case '/translate':
-          systemPrompt = `You are a professional translator. Translate the given text accurately to ${target_language || 'Spanish'}. Preserve the meaning and tone.`;
-          userContent = `Translate the following text to ${target_language || 'Spanish'}:\n\n${contentSnippet}`;
-          break;
-        case '/rag':
-          const pageText = (text || html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 12000);
-          const selectionNote = selected_text ? `\n\nUser has selected this text on the page: "${selected_text.substring(0, 1000)}"` : '';
-          systemPrompt = 'You are a helpful AI assistant embedded in a web browser. You have access to the current web page content and can answer questions about it accurately. Be concise but thorough. Use markdown formatting where appropriate.';
-          userContent = `${pageCtx}\n\nPage Content:\n${pageText}${selectionNote}\n\nUser Question: ${query}`;
-          key = 'answer';
-          break;
+      const backendPayload = {
+        ...reqPayload,
+        api_key: apiKey.trim(),
+      };
+      
+      // Field mapping: extraction_goal → data_type
+      if (endpoint === '/extract' && reqPayload.extraction_goal) {
+        backendPayload.data_type = reqPayload.extraction_goal;
       }
+      // Remove renderer-only fields the backend doesn't need
+      delete backendPayload.apiKey;
 
-      const response = await fetch(OPENROUTER_API_URL, {
+      const response = await fetch(`${AI_BACKEND_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey.trim()}`,
-          'HTTP-Referer': 'https://verse-browser.app',
-          'X-Title': 'Verse Browser AI',
-        },
-        body: JSON.stringify({
-          model: reqPayload.model || DEFAULT_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent },
-          ],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendPayload),
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        return { error: `OpenRouter error: ${errText}` };
+        return { error: `Backend error (${response.status}): ${errText}` };
       }
 
       const data = await response.json();
-      const answer = data.choices?.[0]?.message?.content || 'No response received.';
-      return { [key]: answer, answer, result: answer };
+      return {
+        answer: data.answer || data.result || 'No response received.',
+        result: data.result || data.answer,
+        faqs: data.result,
+      };
     } catch (e) {
       console.error('AI Request Error:', e);
       return { error: e.message };
@@ -1078,6 +1025,201 @@ app.whenReady().then(async () => {
       }
     }
   });
+
+  // --- MCP Server Integration ---
+  const { fork } = require('child_process');
+  const http = require('http');
+  const tabManager = require('./tabManager');
+  let mcpServerProcess = null;
+
+  async function handleMcpBridgeMessage(msg) {
+    const { type, data } = msg;
+    const { getViewsMap } = require('./tabManager');
+    switch (type) {
+      case 'getTabs': {
+        const allTabs = [];
+        for (const win of allWindows) {
+          if (win.isDestroyed()) continue;
+          try {
+            const tabs = await win.webContents.executeJavaScript(
+              `JSON.parse(JSON.stringify(window.__getBrowserTabs?.() || []))`
+            );
+            allTabs.push(...tabs.map(t => ({ ...t, windowId: win.id })));
+          } catch(e) {}
+        }
+        return allTabs;
+      }
+      case 'getBookmarks': {
+        const win = mainWindow || [...allWindows][0];
+        if (!win || win.isDestroyed()) return [];
+        return await win.webContents.executeJavaScript(
+          `JSON.parse(JSON.stringify(window.__getBookmarks?.() || []))`
+        );
+      }
+      case 'getHistory': {
+        const win = mainWindow || [...allWindows][0];
+        if (!win || win.isDestroyed()) return [];
+        const limit = data.limit || 100;
+        return await win.webContents.executeJavaScript(
+          `JSON.parse(JSON.stringify((window.__getHistory?.() || []).slice(0, ${limit})))`
+        );
+      }
+      case 'getActiveTab': {
+        const win = mainWindow || [...allWindows][0];
+        if (!win || win.isDestroyed()) return {};
+        const tabs = await win.webContents.executeJavaScript(`JSON.parse(JSON.stringify(window.__getBrowserTabs?.() || []))`);
+        const activeTab = tabs.find(t => t.isActive);
+        if (!activeTab) return {};
+        const view = getViewsMap ? getViewsMap().get(activeTab.id) : null;
+        let content = '';
+        if (view) {
+           content = await view.webContents.executeJavaScript(`
+            (function() {
+              var clone = document.body.cloneNode(true);
+              ['script','style','noscript','svg','iframe'].forEach(function(tag) {
+                clone.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+              });
+              return clone.innerText || clone.textContent || '';
+            })()
+          `);
+        }
+        return { id: activeTab.id, title: activeTab.title, url: activeTab.url, content };
+      }
+      case 'getPageContent': {
+        const tabId = data.tabId;
+        if (!tabId) {
+            return handleMcpBridgeMessage({ type: 'getActiveTab', data: {} });
+        }
+        const view = getViewsMap ? getViewsMap().get(tabId) : null;
+        if (!view) throw new Error(`Tab ${tabId} not found`);
+        const content = await view.webContents.executeJavaScript(`
+          (function() {
+            var clone = document.body.cloneNode(true);
+            ['script','style','noscript','svg','iframe'].forEach(function(tag) {
+              clone.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+            });
+            return clone.innerText || clone.textContent || '';
+          })()
+        `);
+        return { content, title: view.webContents.getTitle(), url: view.webContents.getURL() };
+      }
+      case 'navigateTo': {
+        const win = mainWindow || [...allWindows][0];
+        win.webContents.send('keyboard-shortcut', 'navigate', data.url);
+        return { success: true };
+      }
+      case 'createTab': {
+        const win = mainWindow || [...allWindows][0];
+        win.webContents.send('new-tab-url', data.url || 'browser://newtab');
+        return { success: true };
+      }
+      case 'closeTab': {
+        const win = mainWindow || [...allWindows][0];
+        win.webContents.send('keyboard-shortcut', 'close-tab');
+        return { success: true };
+      }
+      case 'takeScreenshot': {
+        const tabId = data.tabId;
+        if (!tabId) {
+            const win = mainWindow || [...allWindows][0];
+            const tabs = await win.webContents.executeJavaScript(`JSON.parse(JSON.stringify(window.__getBrowserTabs?.() || []))`);
+            const activeTab = tabs.find(t => t.isActive);
+            if (!activeTab) throw new Error(`Active tab not found`);
+            data.tabId = activeTab.id;
+        }
+        const view = getViewsMap ? getViewsMap().get(data.tabId) : null;
+        if (!view) throw new Error(`Tab ${data.tabId} not found`);
+        const image = await view.webContents.capturePage();
+        return { image: image.toPNG().toString('base64') };
+      }
+      case 'aiRequest': {
+        const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://versr-ai-browser-verse.hf.space';
+        const response = await fetch(`${AI_BACKEND_URL}${data.endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data.payload, api_key: process.env.OPENROUTER_API_KEY }),
+        });
+        return await response.json();
+      }
+      default:
+        throw new Error(`Unknown bridge message type: ${type}`);
+    }
+  }
+
+  function startMcpServer() {
+    const serverPath = path.join(__dirname, '..', 'mcp-server', 'server.js');
+    mcpServerProcess = fork(serverPath, [], {
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+      env: { ...process.env }
+    });
+    
+    mcpServerProcess.on('message', async (msg) => {
+      try {
+        const result = await handleMcpBridgeMessage(msg);
+        mcpServerProcess.send({ id: msg.id, result });
+      } catch (error) {
+        mcpServerProcess.send({ id: msg.id, error: error.message });
+      }
+    });
+    
+    mcpServerProcess.on('exit', (code) => {
+      console.log(`[MCP Server] Exited with code ${code}`);
+      mcpServerProcess = null;
+    });
+  }
+
+  function startMcpBridgeHttpServer() {
+    const server = http.createServer(async (req, res) => {
+      if (req.method === 'POST' && req.url === '/mcp-bridge') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+          try {
+            const msg = JSON.parse(body);
+            const result = await handleMcpBridgeMessage(msg);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ id: msg.id, result }));
+          } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ id: 0, error: error.message }));
+          }
+        });
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    
+    server.listen(38271, '127.0.0.1', () => {
+      console.log('[MCP Bridge] HTTP server listening on http://127.0.0.1:38271');
+    });
+  }
+
+  startMcpServer();
+  startMcpBridgeHttpServer();
+
+  // --- MCP Client Manager (External Connections) ---
+  const McpClientManager = require('./mcpClient');
+  const mcpClientManager = new McpClientManager(
+    path.join(app.getPath('userData'), 'mcp-servers.json')
+  );
+  
+  mcpClientManager.loadConfig().catch(console.error);
+
+  ipcMain.handle('mcp-client:listServers', () => mcpClientManager.listServers());
+  ipcMain.handle('mcp-client:listTools', (_, server) => mcpClientManager.listTools(server));
+  ipcMain.handle('mcp-client:callTool', (_, { server, tool, args }) => 
+    mcpClientManager.callTool(server, tool, args)
+  );
+  ipcMain.handle('mcp-client:addServer', (_, { name, config }) => 
+    mcpClientManager.addServer(name, config)
+  );
+  ipcMain.handle('mcp-client:removeServer', (_, name) => 
+    mcpClientManager.removeServer(name)
+  );
+  ipcMain.handle('mcp-client:toggleServer', (_, { name, enabled }) => 
+    mcpClientManager.toggleServer(name, enabled)
+  );
 
 });
 app.on("window-all-closed", () => {

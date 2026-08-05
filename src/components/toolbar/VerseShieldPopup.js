@@ -36,7 +36,7 @@ function SelectDropdown({ value, options, onChange, disabled }) {
   );
 }
 
-export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) {
+export default function VerseShieldPopup({ url, initialStats, tabId, onClose, isStandalone }) {
   const popupRef = useRef(null);
   const [shieldEnabled, setShieldEnabled] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -69,16 +69,39 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
     }
   }, [hostname, isInternalPage, tabId]);
 
-  // Listen for live stat updates
+  // Listen for live stat updates while popup is open
   useEffect(() => {
-    if (!window.electron?.tabManager?.onAdBlockerStatUpdate) return;
+    if (!window.electron?.tabManager || isInternalPage) return;
+
     const cleanup = window.electron.tabManager.onAdBlockerStatUpdate((data) => {
-      if (data.tabId === tabId && data.tab) {
-        setStats(data.tab);
+      if (data.tabId === tabId) {
+        setStats({
+          ads: data.tab.ads || 0,
+          fingerprints: data.tab.fingerprints || 0,
+          httpUpgrades: data.tab.httpUpgrades || 0
+        });
       }
     });
+
     return cleanup;
-  }, [tabId]);
+  }, [tabId, isInternalPage]);
+
+  // Auto-resize native popup window
+  useEffect(() => {
+    if (!isStandalone || !window.electron?.tabManager?.resizePopup || !popupRef.current) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      if (popupRef.current) {
+        const height = popupRef.current.getBoundingClientRect().height;
+        if (height > 0) {
+          window.electron.tabManager.resizePopup({ width: 360, height: height });
+        }
+      }
+    });
+    
+    resizeObserver.observe(popupRef.current);
+    return () => resizeObserver.disconnect();
+  }, [isStandalone]);
 
   // Click outside to close
   useEffect(() => {
@@ -122,7 +145,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
 
   if (isInternalPage) {
     return (
-      <div ref={popupRef} className="absolute top-9 left-0 w-80 bg-surface border border-border rounded-xl shadow-2xl z-50 p-4">
+      <div ref={popupRef} className={clsx("bg-surface border border-border shadow-2xl p-4", !isStandalone ? "absolute top-9 left-0 w-80 rounded-xl z-50" : "w-full rounded-none")}>
         <div className="flex items-center space-x-2 text-foreground/70">
           <Shield size={18} />
           <span className="text-sm">Verse Shield is not available for internal pages.</span>
@@ -134,7 +157,10 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose }) 
   return (
     <div
       ref={popupRef}
-      className="absolute top-9 -left-60 w-[320px] bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-50 overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150"
+      className={clsx(
+        "bg-surface/95 backdrop-blur-xl border border-border shadow-2xl overflow-hidden text-foreground animate-in fade-in slide-in-from-top-1 duration-150",
+        !isStandalone ? "absolute top-9 -left-60 w-[320px] rounded-xl z-50" : "w-full h-max rounded-none"
+      )}
     >
       {/* ─── Header: Domain + Shield Toggle ─── */}
       <div className={clsx(

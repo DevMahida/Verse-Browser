@@ -416,6 +416,18 @@ function initTabManager() {
     }
   });
 
+  // Execute arbitrary JavaScript in a tab's webContents (used by AISidebar, NavigationBar, and MCP bridge)
+  ipcMain.handle('tab-execute-js', async (event, { tabId, code }) => {
+    const view = views.get(tabId);
+    if (!view || view.webContents.isDestroyed()) return null;
+    try {
+      return await view.webContents.executeJavaScript(code);
+    } catch (e) {
+      console.error(`[TabManager] executeJavaScript failed for tab ${tabId}:`, e.message);
+      return null;
+    }
+  });
+
   ipcMain.on('open-popup', (event, { url, width, height, x, y }) => {
     const parentWin = BrowserWindow.fromWebContents(event.sender);
     const profileId = parentWin ? parentWin._profileId : 'main';
@@ -426,6 +438,12 @@ function initTabManager() {
 
   ipcMain.on('close-popup', () => {
     closePopupWindow();
+  });
+
+  ipcMain.on('resize-popup', (event, { width, height }) => {
+    console.log(`[IPC] resize-popup called with width=${width}, height=${height}`);
+    const { resizePopupWindow } = require('./popupManager');
+    resizePopupWindow(width, height);
   });
 
   ipcMain.on('open-new-tab', (event, { url }) => {

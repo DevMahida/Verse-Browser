@@ -117,9 +117,9 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
         tabId: tab.id,
         bounds: { 
           x: Math.round(rect.x), 
-          y: Math.round(rect.y), 
+          y: Math.round(rect.y + (dropdownOffset || 0)), 
           width: Math.round(rect.width), 
-          height: Math.round(rect.height)
+          height: Math.round(Math.max(0, rect.height - (dropdownOffset || 0)))
         },
         isActive: isActive // Always keep the active tab attached to prevent Chromium network throttling
       });
@@ -135,7 +135,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       clearTimeout(timer);
       resizeObserver.disconnect();
     };
-  }, [tab.id, isActive, styleClass]);
+  }, [tab.id, isActive, styleClass, dropdownOffset]);
 
   // 4. Remote Navigation
   useEffect(() => {

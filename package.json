@@ -48,6 +48,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@ghostery/adblocker-electron": "^2.18.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@mozilla/readability": "^0.6.0",
     "axios": "^1.18.1",
     "clsx": "^2.1.1",

@@ -502,14 +502,6 @@ export default function NavigationBar() {
               </button>
             )}
 
-            {showShieldPopup && (
-              <VerseShieldPopup
-                url={activeTab?.url}
-                tabId={activePaneTabId}
-                onClose={() => setShowShieldPopup(false)}
-              />
-            )}
-
             {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
               <div></div>
               // <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
@@ -517,9 +509,26 @@ export default function NavigationBar() {
               <>
                 <span className="text-gray-500 me-1">|</span>
                 <button
-                  onClick={() => {
-                    setShowShieldPopup(!showShieldPopup);
-                    setShowSiteSettings(false);
+                  onClick={(e) => {
+                    if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const popupWidth = 360;
+                      const popupHeight = 460;
+                      const x = Math.round(window.screenX + rect.right - popupWidth);
+                      const y = Math.round(window.screenY + rect.bottom + 8);
+                      
+                      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                      const urlParam = activeTab?.url ? `&url=${encodeURIComponent(activeTab.url)}` : '';
+                      const popupUrl = `${baseUrl}/popup?type=shield&tabId=${activePaneTabId}${urlParam}`;
+
+                      window.electron.tabManager.openPopup({
+                        url: popupUrl,
+                        width: popupWidth,
+                        height: popupHeight,
+                        x,
+                        y
+                      });
+                    }
                   }}
                   className={clsx(
                     "relative mr-2 transition-colors p-1 rounded-full hover:bg-foreground/10",

@@ -72,7 +72,17 @@ function closePopupWindow() {
   activePopupWindow = null;
 }
 
+/**
+ * Resizes the active floating popup window.
+ */
+function resizePopupWindow(width, height) {
+  if (activePopupWindow && !activePopupWindow.isDestroyed()) {
+    activePopupWindow.setSize(Math.round(width), Math.round(height));
+  }
+}
+
 module.exports = {
   showPopupWindow,
-  closePopupWindow
+  closePopupWindow,
+  resizePopupWindow
 };

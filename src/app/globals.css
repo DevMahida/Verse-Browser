@@ -88,3 +88,8 @@ a,
 [role="button"] {
   cursor: pointer;
 }
+
+/* Hide Next.js dev build indicator in native popups */
+nextjs-portal {
+  display: none !important;
+}

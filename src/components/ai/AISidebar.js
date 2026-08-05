@@ -392,6 +392,7 @@ export default function AISidebar() {
   };
 
   const buildPayload = (extra) => ({
+    html: extra?.text || "",
     ...extra,
     model: selectedAiModel,
     apiKey: openRouterApiKey || undefined,
@@ -724,6 +725,19 @@ export default function AISidebar() {
       const currentTab = tabs?.find(t => t.id === tabId) || {};
       const pageText = await getPageContent("text");
       const selectedText = await getPageContent("selected");
+      
+      let mcp_tools = "";
+      try {
+        if (window.electron.mcpClient) {
+           const servers = await window.electron.mcpClient.listServers();
+           const toolsArr = [];
+           for (const s of servers.filter(s => s.status === 'connected')) {
+             const t = await window.electron.mcpClient.listTools(s.name);
+             if (t && t.length > 0) toolsArr.push({ server: s.name, tools: t });
+           }
+           if (toolsArr.length > 0) mcp_tools = JSON.stringify(toolsArr);
+        }
+      } catch(e) { console.error("MCP fetch error", e); }
 
       abortControllerRef.current = new AbortController();
       // Use IPC for RAG chat request
@@ -735,13 +749,42 @@ export default function AISidebar() {
           title: currentTab.title || "",
           url: currentTab.url || "",
           selected_text: (selectedText || "").substring(0, 2000),
+          mcp_tools,
         })
       });
 
       if (abortControllerRef.current.signal.aborted) throw new Error("AbortError");
       if (result.error) throw new Error(result.error);
       
-      setMessages(prev => [...prev, { role: "assistant", content: result.answer || result.result || "No response received.", model: selectedAiModel }]);
+      let responseText = result.answer || result.result || "No response received.";
+      const toolCallMatch = responseText.match(/\[TOOL_CALL:\s*([^\s]+)\s+(.*?)\]/is);
+      
+      if (toolCallMatch) {
+         const fullMatch = toolCallMatch[0];
+         const toolPath = toolCallMatch[1]; // serverName.toolName
+         const argStr = toolCallMatch[2];
+         
+         responseText = responseText.replace(fullMatch, "").trim();
+         if (responseText) {
+            setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
+         }
+         
+         const [serverName, toolName] = toolPath.split('.');
+         let parsedArgs = {};
+         try { parsedArgs = JSON.parse(argStr.trim()); } catch(e) {}
+         
+         setMessages(prev => [...prev, { role: "system", content: `Executing tool ${serverName}.${toolName}...` }]);
+         
+         try {
+           const mcpRes = await window.electron.mcpClient.callTool(serverName, toolName, parsedArgs);
+           const resultStr = mcpRes?.content?.[0]?.text || JSON.stringify(mcpRes) || "Success";
+           setMessages(prev => [...prev, { role: "system", content: `Tool result:\n${resultStr.substring(0,2000)}` }]);
+         } catch (e) {
+           setMessages(prev => [...prev, { role: "system", content: `Tool failed: ${e.message}` }]);
+         }
+      } else {
+         setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
+      }
     } catch (e) {
       if (e.name === "AbortError") {
         setMessages(prev => [...prev, { role: "assistant", content: "Response stopped.", model: selectedAiModel }]);

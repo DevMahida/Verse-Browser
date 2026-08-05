@@ -113,6 +113,10 @@ export const useBrowserStore = create(
   setSelectedAiModel: (model) => set({ selectedAiModel: model }),
   researchMode: false,
   setResearchMode: (mode) => set({ researchMode: mode }),
+  
+  // MCP State
+  mcpServers: [],
+  setMcpServers: (servers) => set({ mcpServers: servers }),
   saveAiSession: async (session) => {
     set((state) => {
       const exists = state.aiChatSessions.find(s => s.id === session.id);

@@ -59,6 +59,15 @@ contextBridge.exposeInMainWorld("electron", {
     checkVersion: () => ipcRenderer.invoke('safety-check-version'),
     checkBreaches: (email) => ipcRenderer.invoke('safety-check-breaches', email),
   },
+
+  mcpClient: {
+    listServers: () => ipcRenderer.invoke('mcp-client:listServers'),
+    listTools: (server) => ipcRenderer.invoke('mcp-client:listTools', server),
+    callTool: (server, tool, args) => ipcRenderer.invoke('mcp-client:callTool', { server, tool, args }),
+    addServer: (name, config) => ipcRenderer.invoke('mcp-client:addServer', { name, config }),
+    removeServer: (name) => ipcRenderer.invoke('mcp-client:removeServer', name),
+    toggleServer: (name, enabled) => ipcRenderer.invoke('mcp-client:toggleServer', { name, enabled }),
+  },
   
   // TabManager (WebContentsView/BrowserView)
   tabManager: {
@@ -72,7 +81,9 @@ contextBridge.exposeInMainWorld("electron", {
     fetchSource: (data) => ipcRenderer.invoke('fetch-source', data),
     openPopup: (data) => ipcRenderer.send('open-popup', data),
     closePopup: () => ipcRenderer.send('close-popup'),
+    resizePopup: (data) => ipcRenderer.send('resize-popup', data),
     openNewTab: (data) => ipcRenderer.send('open-new-tab', data),
+    executeJavaScript: (data) => ipcRenderer.invoke('tab-execute-js', data),
     onTabEvent: (callback) => {
       const handler = (_event, data) => callback(data);
       ipcRenderer.on('tab-event', handler);
