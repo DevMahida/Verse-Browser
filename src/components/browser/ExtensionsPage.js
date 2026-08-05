@@ -47,7 +47,7 @@ export default function ExtensionsPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20 flex items-center justify-center">
               <Puzzle size={24} className="text-blue-400" />
             </div>
             <div>

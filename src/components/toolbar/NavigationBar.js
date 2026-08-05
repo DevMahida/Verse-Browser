@@ -83,9 +83,11 @@ export default function NavigationBar() {
   const prevCompletedCount = useRef(0);
   const { suggestions } = useSearchSuggestions(inputValue);
   
-  useEffect(() => {
+  const [prevSuggestions, setPrevSuggestions] = useState(suggestions);
+  if (suggestions !== prevSuggestions) {
+    setPrevSuggestions(suggestions);
     setSelectedIndex(-1);
-  }, [suggestions]);
+  }
   
   useEffect(() => {
     if (window.electron && window.electron.tabManager && window.electron.tabManager.showSuggestionsPopup) {

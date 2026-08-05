@@ -314,7 +314,7 @@ export default function VerseShieldPopup({ url, initialStats, tabId, onClose, is
                 )}
               >
                 <span className={clsx(
-                  "absolute top-[1px] left-[1px] w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform duration-200",
+                  "absolute top-px left-px w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform duration-200",
                   siteSettings.httpsUpgrade && shieldEnabled ? "translate-x-3.5" : "translate-x-0"
                 )} />
               </button>

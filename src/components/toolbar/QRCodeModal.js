@@ -362,7 +362,7 @@ export default function QRCodeModal({ url, onClose }) {
   const truncatedUrl = displayUrl.length > 40 ? displayUrl.substring(0, 40) + '…' : displayUrl;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150">
       <div
         ref={modalRef}
         className="bg-surface border border-border rounded-2xl shadow-2xl w-[320px] overflow-hidden animate-in zoom-in-95 fade-in duration-200"
