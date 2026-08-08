@@ -53,6 +53,20 @@ export const AVAILABLE_EXTENSIONS = [
     description: "Pop out a video from a tab into a floating, resizable window that stays on top of your screen.",
     icon: "🖼️",
     category: "Media",
+  },
+  {
+    id: "ext-vpn",
+    name: "Verse VPN",
+    description: "Secure your browsing and bypass geographical restrictions with a built-in virtual private network.",
+    icon: "🛡️",
+    category: "Security",
+  },
+  {
+    id: "ext-vault",
+    name: "Vault (Password Manager)",
+    description: "Securely store encrypted passwords and auto-fill login forms across websites.",
+    icon: "🔑",
+    category: "Security",
   }
 ];
 
@@ -109,14 +123,44 @@ export const useBrowserStore = create(
   // AI Chat History
   aiChatSessions: [],
   currentAiSessionId: null,
-  selectedAiModel: 'meta-llama/llama-3.1-8b-instruct',
+  selectedAiModel: 'google/gemini-2.5-flash',
   setSelectedAiModel: (model) => set({ selectedAiModel: model }),
   researchMode: false,
   setResearchMode: (mode) => set({ researchMode: mode }),
   
+  // Live Data Context for AI & Preferences
+  savedWeatherLocation: null,
+  setSavedWeatherLocation: (location) => set({ savedWeatherLocation: location }),
+  liveWeather: null,
+  setLiveWeather: (weather) => set({ liveWeather: weather }),
+  liveNews: null,
+  setLiveNews: (news) => set({ liveNews: news }),
+  
   // MCP State
   mcpServers: [],
   setMcpServers: (servers) => set({ mcpServers: servers }),
+
+  // VPN State
+  vpnEnabled: false,
+  vpnProxyServer: '', // Empty means no proxy, or handled dynamically based on location
+  vpnLocation: null,
+  showVpnModal: false,
+  vpnLocations: [
+    { id: 'us-east', name: 'United States (East)', proxy: 'mock-proxy-us:8080', flag: '🇺🇸' },
+    { id: 'uk-london', name: 'United Kingdom', proxy: 'mock-proxy-uk:8080', flag: '🇬🇧' },
+    { id: 'de-frankfurt', name: 'Germany', proxy: 'mock-proxy-de:8080', flag: '🇩🇪' },
+    { id: 'jp-tokyo', name: 'Japan', proxy: 'mock-proxy-jp:8080', flag: '🇯🇵' },
+    { id: 'au-sydney', name: 'Australia', proxy: 'mock-proxy-au:8080', flag: '🇦🇺' },
+  ],
+  setVpnEnabled: (enabled) => set({ vpnEnabled: enabled }),
+  setVpnProxyServer: (server) => set({ vpnProxyServer: server }),
+  setVpnLocation: (locationId) => set({ vpnLocation: locationId }),
+  setShowVpnModal: (show) => set({ showVpnModal: show }),
+
+  // Vault State
+  vaultUnlocked: false,
+  setVaultUnlocked: (unlocked) => set({ vaultUnlocked: unlocked }),
+
   saveAiSession: async (session) => {
     set((state) => {
       const exists = state.aiChatSessions.find(s => s.id === session.id);
@@ -155,7 +199,7 @@ export const useBrowserStore = create(
           }
         }
       } catch (e) {
-        console.error("Failed to save AI session to Firebase", e);
+        if (e?.message?.includes('permissions')) { console.debug("Failed to save AI session to Firebase" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to save AI session to Firebase", e); }
       }
     }
   },
@@ -179,7 +223,7 @@ export const useBrowserStore = create(
         // Then delete the session document
         await deleteDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", id));
       } catch (e) {
-        console.error("Failed to delete AI session from Firebase", e);
+        if (e?.message?.includes('permissions')) { console.debug("Failed to delete AI session from Firebase" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to delete AI session from Firebase", e); }
       }
     }
   },
@@ -204,7 +248,7 @@ export const useBrowserStore = create(
           await deleteDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "aiChatSessions", session.id));
         }
       } catch (e) {
-        console.error("Failed to clear AI sessions from Firebase", e);
+        if (e?.message?.includes('permissions')) { console.debug("Failed to clear AI sessions from Firebase" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to clear AI sessions from Firebase", e); }
       }
     }
   },
@@ -239,7 +283,7 @@ export const useBrowserStore = create(
           set({ bookmarks: merged });
         }
       }
-    } catch (e) { console.error("Failed to fetch bookmarks", e); }
+    } catch (e) { if (e?.message?.includes('permissions')) { console.debug("Failed to fetch bookmarks" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to fetch bookmarks", e); } }
 
     // Fetch Reading List
     try {
@@ -265,7 +309,7 @@ export const useBrowserStore = create(
           set({ readingList: merged });
         }
       }
-    } catch (e) { console.error("Failed to fetch reading list", e); }
+    } catch (e) { if (e?.message?.includes('permissions')) { console.debug("Failed to fetch reading list" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to fetch reading list", e); } }
 
     // Fetch AI Chat Sessions (with messages from sub-collections)
     try {
@@ -314,7 +358,7 @@ export const useBrowserStore = create(
           set({ aiChatSessions: merged.slice(0, 50) });
         }
       }
-    } catch (e) { console.error("Failed to fetch AI sessions", e); }
+    } catch (e) { if (e?.message?.includes('permissions')) { console.debug("Failed to fetch AI sessions" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to fetch AI sessions", e); } }
 
     // Fetch Theme Settings
     try {
@@ -331,7 +375,7 @@ export const useBrowserStore = create(
         }
         if (Object.keys(updates).length > 0) set(updates);
       }
-    } catch (e) { console.error("Failed to fetch theme settings", e); }
+    } catch (e) { if (e?.message?.includes('permissions')) { console.debug("Failed to fetch theme settings" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Failed to fetch theme settings", e); } }
   },
 
   // Split View State
@@ -882,7 +926,9 @@ export const useBrowserStore = create(
       try {
         await setDoc(doc(db, "users", state.firebaseUid, "profiles", fbProfile, "history", state.lastHistoryDocId), updates, { merge: true });
       } catch (err) {
-        console.error("Failed to update history meta in Firebase", err);
+        if (!err.message?.includes("Missing or insufficient permissions")) {
+          console.error("Failed to update history meta in Firebase", err);
+        }
       }
     }
   },
@@ -1024,7 +1070,7 @@ export const useBrowserStore = create(
               avatar: result.currentUser.pic,
               timestamp: serverTimestamp()
             }, { merge: true });
-          } catch (e) { console.error("Firestore sync error:", e); }
+          } catch (e) { if (e?.message?.includes('permissions')) { console.debug("Firestore sync error:" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Firestore sync error:", e); } }
           get().syncFirebaseData();
         }
 
@@ -1039,7 +1085,7 @@ export const useBrowserStore = create(
         }
       }
     } catch (e) {
-      console.error('Failed to check login state:', e);
+      if (e?.message?.includes('permissions')) { console.debug('Failed to check login state:' + ' (Permission denied, check Firestore Rules)'); } else { console.error('Failed to check login state:', e); }
     }
   },
 
@@ -1059,7 +1105,7 @@ export const useBrowserStore = create(
       }
       set({ isLoggedIn: false, userProfilePic: null, currentUser: null, accounts: [] });
     } catch (e) {
-      console.error('Failed to logout:', e);
+      if (e?.message?.includes('permissions')) { console.debug('Failed to logout:' + ' (Permission denied, check Firestore Rules)'); } else { console.error('Failed to logout:', e); }
     }
   },
 
@@ -1145,6 +1191,14 @@ export const useBrowserStore = create(
     }
     return { sessionPermissions: updatedPermissions };
   }),
+  updateSessionPermission: (origin, permission, granted) => set((state) => {
+    const updatedPermissions = { ...state.sessionPermissions };
+    if (!updatedPermissions[origin]) {
+      updatedPermissions[origin] = {};
+    }
+    updatedPermissions[origin][permission] = granted ? 'granted' : 'denied';
+    return { sessionPermissions: updatedPermissions };
+  }),
   clearSessionPermissions: () => set({ sessionPermissions: {}, activePermissionRequests: [] }),
 
     }),
@@ -1203,7 +1257,7 @@ if (typeof window !== 'undefined') {
         const userCred = await signInAnonymously(auth);
         uid = userCred.user.uid;
       } catch (e) {
-        console.error("Firebase Anonymous Auth failed", e);
+        if (e?.message?.includes('permissions')) { console.debug("Firebase Anonymous Auth failed" + ' (Permission denied, check Firestore Rules)'); } else { console.error("Firebase Anonymous Auth failed", e); }
       }
     } else {
       uid = user.uid;

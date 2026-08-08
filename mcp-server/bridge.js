@@ -51,9 +51,14 @@ export class Bridge {
 
   async _httpRequest(type, id, data) {
     // Port 38271 is used by Electron app for HTTP bridge fallback
+    // Bug 6 Fix: Include auth token in requests
+    const authToken = process.env.MCP_BRIDGE_AUTH_TOKEN || '';
     const res = await fetch('http://127.0.0.1:38271/mcp-bridge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
       body: JSON.stringify({ type, id, data }),
     });
     

@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen, Pipette, PictureInPicture2, Zap, Type, QrCode } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCw, Home, Star, Shield, ShieldCheck, Download, Bookmark, Sparkles, Languages, Moon, Sun, X, Clock, Puzzle, MoreVertical, Settings, Plus, LogOut, Printer, Minus, Terminal, EyeOff, ZoomIn, User, BookOpen, Pipette, PictureInPicture2, Zap, Type, QrCode, Globe, Key } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
 import clsx from "clsx";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
-import PermissionPrompt from "./PermissionPrompt";
 import SiteSettingsPopup from "./SiteSettingsPopup";
 import VerseShieldPopup from "./VerseShieldPopup";
 import HistoryPopup from "./HistoryPopup";
@@ -18,8 +17,10 @@ import ExtensionsPopup from "./ExtensionsPopup";
 import BrowserMenu from "./BrowserMenu";
 import ProfileMenu from "./ProfileMenu";
 import ZoomPopup from "./ZoomPopup";
+import VpnLocationModal from "./VpnLocationModal";
+
 export default function NavigationBar() {
-  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton, installedExtensions, toggleExtension } = useBrowserStore(
+  const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton, installedExtensions, toggleExtension, activePermissionRequests, vpnEnabled, setVpnEnabled, vaultUnlocked, setVaultUnlocked, showVpnModal, setShowVpnModal } = useBrowserStore(
     useShallow((state) => ({
       toggleAISidebar: state.toggleAISidebar,
       isAISidebarOpen: state.isAISidebarOpen,
@@ -50,6 +51,13 @@ export default function NavigationBar() {
       showHomeButton: state.showHomeButton,
       installedExtensions: state.installedExtensions,
       toggleExtension: state.toggleExtension,
+      activePermissionRequests: state.activePermissionRequests,
+      vpnEnabled: state.vpnEnabled,
+      setVpnEnabled: state.setVpnEnabled,
+      vaultUnlocked: state.vaultUnlocked,
+      setVaultUnlocked: state.setVaultUnlocked,
+      showVpnModal: state.showVpnModal,
+      setShowVpnModal: state.setShowVpnModal,
     }))
   );
 
@@ -292,6 +300,37 @@ export default function NavigationBar() {
     return cleanup;
   }, [activePaneTabId]);
 
+  // --- Listen to Popup Window Broadcasts ---
+  useEffect(() => {
+    const bc = new BroadcastChannel('verse-browser-extensions');
+    bc.onmessage = (event) => {
+      if (event.data?.type === 'SHOW_VPN_MODAL') {
+        setShowVpnModal(true);
+      } else if (event.data?.type === 'TOGGLE_VAULT') {
+        setVaultUnlocked(event.data.state);
+      } else if (event.data?.type === 'SYNC_EXTENSIONS') {
+        // Force zustand to re-read localStorage since the popup window updated it
+        useBrowserStore.persist.rehydrate();
+      } else if (event.data?.type === 'CLEAR_VPN') {
+        const store = useBrowserStore.getState();
+        if (store.setVpnEnabled) store.setVpnEnabled(false);
+        if (store.setVpnLocation) store.setVpnLocation(null);
+        if (store.setVpnProxyServer) store.setVpnProxyServer('');
+        if (window.electron?.vpn) {
+          window.electron.vpn.setProxy({});
+        }
+      } else if (event.data?.type === 'REQUEST_VPN_STATE') {
+        const store = useBrowserStore.getState();
+        bc.postMessage({ 
+          type: 'SYNC_VPN_STATE', 
+          vpnEnabled: store.vpnEnabled, 
+          vaultUnlocked: store.vaultUnlocked 
+        });
+      }
+    };
+    return () => bc.close();
+  }, [setShowVpnModal, setVaultUnlocked]);
+
   // Reset shield badge count when switching tabs
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -420,8 +459,6 @@ export default function NavigationBar() {
     <div className="h-12 bg-surface border-b border-border flex items-center px-4 space-x-4 select-none">
       {/* Navigation Controls */}
       <div className="flex items-center space-x-1 text-foreground/70 relative">
-        <PermissionPrompt />
-
         <button
           onClick={handleBack}
           aria-label="Go back"
@@ -697,6 +734,56 @@ export default function NavigationBar() {
           if (ext.id === 'ext-verse-shield') {
             return null; // Shield has its own dedicated toolbar icon
           }
+          if (ext.id === 'ext-vpn') {
+            return (
+              <div key={ext.id} className="relative flex items-center justify-center">
+                <button
+                  onClick={() => setShowVpnModal(true)}
+                  aria-label="Toggle VPN"
+                  className={clsx(
+                    "p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
+                    vpnEnabled ? "bg-accent/20 text-accent" : "hover:bg-foreground/10 hover:text-foreground text-foreground/70"
+                  )}
+                  title="Verse VPN"
+                >
+                  <Globe size={18} />
+                </button>
+              </div>
+            );
+          }
+          if (ext.id === 'ext-vault') {
+            return (
+              <div key={ext.id} className="relative flex items-center justify-center">
+        <button
+          onClick={(e) => {
+            if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const popupWidth = 320;
+              const popupHeight = 400;
+              const x = Math.round(window.screenX + rect.right - popupWidth);
+              const y = Math.round(window.screenY + rect.bottom + 8);
+              
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+              const popupUrl = `${baseUrl}/popup?type=vault`;
+
+              window.electron.tabManager.openPopup({
+                url: popupUrl,
+                width: popupWidth,
+                height: popupHeight,
+                x,
+                y
+              });
+            }
+          }}
+          aria-label="Vault"
+          className="p-2 rounded-full transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none hover:bg-foreground/10 hover:text-foreground text-foreground/70"
+          title="Vault Password Manager"
+        >
+          <Key size={18} />
+                </button>
+              </div>
+            );
+          }
           return null; // Other extensions don't have toolbar actions yet
         })}
 
@@ -807,6 +894,7 @@ export default function NavigationBar() {
         <BrowserMenu />
       </div>
     </div>
+    {showVpnModal && <VpnLocationModal />}
     </>
   );
 }

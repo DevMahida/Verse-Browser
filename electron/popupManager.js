@@ -46,7 +46,10 @@ function showPopupWindow({ parentWin, url, width = 360, height = 380, x, y, part
     }
   });
 
-  activePopupWindow.loadURL(url);
+  const finalUrl = url.startsWith('file://') && !url.includes('.html') 
+    ? url.replace('/popup?', '/popup.html?') 
+    : url;
+  activePopupWindow.loadURL(finalUrl);
 
   activePopupWindow.once('ready-to-show', () => {
     if (activePopupWindow && !activePopupWindow.isDestroyed()) {
@@ -113,7 +116,8 @@ function initSuggestionsPopup(parentWin, partition, baseUrl) {
     }
   });
 
-  suggestionsPopupWindow.loadURL(`${baseUrl}/popup?type=suggestions`);
+  const finalUrl = baseUrl.startsWith('file://') ? `${baseUrl}/popup.html?type=suggestions` : `${baseUrl}/popup?type=suggestions`;
+  suggestionsPopupWindow.loadURL(finalUrl);
 
   suggestionsPopupWindow.webContents.on('did-finish-load', () => {
     if (lastSuggestions && lastSuggestions.length > 0) {

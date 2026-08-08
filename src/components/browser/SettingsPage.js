@@ -4,7 +4,6 @@ import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from "zustand/react/shallow";
 import { Check, MonitorSmartphone, ShieldAlert, X } from "lucide-react";
 import SafetyCheckSection from "./SafetyCheckSection";
-import MCPSettings from "./MCPSettings";
 
 export default function SettingsPage() {
   const { 
@@ -174,9 +173,7 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-
-        {/* MCP Settings Section */}
-        <MCPSettings />
+        
         
         <div className="h-20"></div>
       </div>

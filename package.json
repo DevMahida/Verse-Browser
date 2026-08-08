@@ -21,7 +21,20 @@
     "files": [
       "out/**/*",
       "electron/**/*",
+      "mcp-server/**/*",
+      "public/favicon.png",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.local",
+        "to": ".env.local",
+        "filter": ["**/*"]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "mcp-server/**/*"
     ],
     "win": {
       "target": [

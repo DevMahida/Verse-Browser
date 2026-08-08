@@ -7,7 +7,10 @@ protocol.registerSchemesAsPrivileged([
 const path = require("path");
 
 // Load .env.local so Electron main process can read GOOGLE_CLIENT_ID, etc.
-require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
+const envPath = app.isPackaged 
+  ? path.join(process.resourcesPath, '.env.local')
+  : path.join(__dirname, '..', '.env.local');
+require('dotenv').config({ path: envPath });
 const { initTabManager } = require('./tabManager');
 const profileManager = require('./profileManager');
 const { loadWindowState, trackWindowState } = require('./windowBounds');
@@ -23,7 +26,7 @@ if (isDev) {
 // Chromium feature flags — must be a single comma-separated call (multiple calls overwrite).
 // - WebAuthentication: Electron's WebAuthn is incomplete; disabling it prevents the broken
 //   Windows Security passkey dialog and forces Google to fall back to password auth
-app.commandLine.appendSwitch('disable-features', 'WebAuthentication,WebAuthenticationProxy');
+app.commandLine.appendSwitch('disable-features', 'WebAuthentication,WebAuthenticationProxy,FedCm');
 // Ensure navigator.webdriver is false — Electron can set automation flags that trigger Google's bot detection
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
@@ -157,6 +160,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   // Another instance is already running — focus it instead of launching a second one
   app.quit();
+  process.exit(0);
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -400,6 +404,19 @@ app.whenReady().then(async () => {
   });
 
   const defaultProfile = profileManager.ensureDefaultProfile();
+
+  // Clear any stuck proxy from previous runs BEFORE creating windows
+  try {
+    await session.defaultSession.setProxy({});
+    await session.fromPartition('persist:main').setProxy({});
+    await session.fromPartition('incognito').setProxy({});
+    await session.defaultSession.closeAllConnections();
+    await session.fromPartition('persist:main').closeAllConnections();
+    await session.fromPartition('incognito').closeAllConnections();
+  } catch (e) {
+    console.error('Failed to clear initial proxy', e);
+  }
+
   createWindow(null, undefined, undefined, false, defaultProfile.id);
 
   ipcMain.on('window-minimize', (event) => {
@@ -697,8 +714,11 @@ app.whenReady().then(async () => {
         return { success: false, error: `API returned ${response.status}` };
       }
       const data = await response.json();
-      // XposedOrNot returns breaches in data.breaches array
-      const breaches = data.breaches || [];
+      // XposedOrNot returns breaches as a nested array: [["breach1", "breach2"]]
+      let breaches = data.breaches || [];
+      if (breaches.length > 0 && Array.isArray(breaches[0])) {
+        breaches = breaches[0];
+      }
       return { success: true, breaches, count: breaches.length };
     } catch (e) {
       console.error('Safety check breach lookup failed:', e);
@@ -780,10 +800,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai-request', async (event, payload) => {
     try {
       const { endpoint, payload: reqPayload } = payload || {};
-      // API key: renderer-provided takes priority, then env variable
-      const apiKey = reqPayload?.apiKey || process.env.OPENROUTER_API_KEY;
+      const envKeys = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || '';
+      let envKey = envKeys.includes(',') ? envKeys.split(',')[0].trim() : envKeys.trim();
+      const apiKey = reqPayload?.apiKey || envKey;
       if (!apiKey?.trim()) {
-        return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEY in .env.local.' };
+        return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEYS in .env.local.' };
       }
 
       const backendPayload = {
@@ -817,6 +838,63 @@ app.whenReady().then(async () => {
       };
     } catch (e) {
       console.error('AI Request Error:', e);
+      return { error: e.message };
+    }
+  });
+
+  ipcMain.handle('ai-chat', async (event, payload) => {
+    try {
+      const { messages, model, apiKey: rendererKey, fallbackModels = [] } = payload || {};
+      const envKeys = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || '';
+      
+      // Use renderer key if provided in UI, otherwise use env keys
+      let rawKeys = rendererKey?.trim() ? rendererKey : envKeys;
+      
+      let keysArray = [rawKeys];
+      if (rawKeys.includes(',')) {
+        keysArray = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+        // Shuffle for random load balancing
+        keysArray = keysArray.sort(() => Math.random() - 0.5);
+      }
+      
+      if (keysArray.length === 0) {
+        return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEYS in .env.local.' };
+      }
+
+      const m = model || 'openai/gpt-3.5-turbo';
+      let lastError = null;
+
+      // Try each key for the current model
+      for (const k of keysArray) {
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${k}`
+            },
+            body: JSON.stringify({
+              model: m,
+              messages: messages
+            })
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            lastError = `OpenRouter API error (${response.status}): ${errText}`;
+            if (response.status === 429 || response.status === 402 || response.status === 502 || response.status >= 500) {
+              console.warn(`Model ${m} with key ending in ${k.slice(-4)} failed (${response.status}), trying next key...`);
+              continue; // Try next key
+            }
+            break; // Hard error (400, etc.), break out of key loop
+          }
+
+          const data = await response.json();
+          return { answer: data.choices?.[0]?.message?.content || '', usedModel: m };
+        }
+        
+      return { error: lastError || "All keys failed for this model." };
+    } catch (e) {
+      console.error('AI Chat Error:', e);
       return { error: e.message };
     }
   });
@@ -954,6 +1032,7 @@ app.whenReady().then(async () => {
 
     const permKey = `${origin}-${permission}`;
     
+    // Open floating popup instead of native dialog
     if (sessionPermissions.has(permKey)) {
       return callback(sessionPermissions.get(permKey) === 'granted');
     }
@@ -961,16 +1040,25 @@ app.whenReady().then(async () => {
     const reqId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     pendingPermissionCallbacks.set(reqId, callback);
 
-    // If it's a webview, the host window is mainWindow. If it's the main window itself, use it.
-    let targetWebContents = webContents.hostWebContents || webContents;
+    const { showPopupWindow } = require('./popupManager');
+    let bounds = { x: 0, y: 0 };
     if (mainWindow && !mainWindow.isDestroyed()) {
-        targetWebContents = mainWindow.webContents;
+      bounds = mainWindow.getBounds();
     }
+    
+    // Position it roughly below the navigation bar on the left
+    const popupX = bounds.x + 20;
+    const popupY = bounds.y + 60; // Approximate height of topbar + url bar
 
-    targetWebContents.send('permission-request', {
-      id: reqId,
-      permission,
-      origin,
+    const baseUrl = app.isPackaged ? "browser://" : "http://localhost:3000";
+
+    showPopupWindow({
+      parentWin: mainWindow,
+      url: `${baseUrl}/popup?type=permission&origin=${encodeURIComponent(origin)}&permission=${encodeURIComponent(permission)}&id=${reqId}`,
+      width: 320,
+      height: 120,
+      x: popupX,
+      y: popupY
     });
   });
 
@@ -982,7 +1070,15 @@ app.whenReady().then(async () => {
       
       const permKey = `${origin}-${permission}`;
       sessionPermissions.set(permKey, granted ? 'granted' : 'denied');
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('permission-updated', { origin, permission, granted });
+      }
     }
+    
+    // Close the popup after response
+    const { closePopupWindow } = require('./popupManager');
+    closePopupWindow();
   });
 
   ipcMain.on('revoke-permission', (event, { origin, permission }) => {
@@ -1147,7 +1243,10 @@ app.whenReady().then(async () => {
   }
 
   function startMcpServer() {
-    const serverPath = path.join(__dirname, '..', 'mcp-server', 'server.js');
+    let serverPath = path.join(__dirname, '..', 'mcp-server', 'server.js');
+    if (serverPath.includes('app.asar')) {
+      serverPath = serverPath.replace('app.asar', 'app.asar.unpacked');
+    }
     mcpServerProcess = fork(serverPath, [], {
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       env: { ...process.env }
@@ -1220,6 +1319,60 @@ app.whenReady().then(async () => {
   ipcMain.handle('mcp-client:toggleServer', (_, { name, enabled }) => 
     mcpClientManager.toggleServer(name, enabled)
   );
+
+  // --- VPN Handlers ---
+  ipcMain.handle('vpn:setProxy', async (event, config) => {
+    try {
+      if (!config || Object.keys(config).length === 0) {
+        await session.defaultSession.setProxy({});
+        await session.fromPartition('persist:main').setProxy({});
+        await session.fromPartition('incognito').setProxy({});
+        // Force close all open TCP/keep-alive connections so the next request MUST use direct connection
+        try {
+          await session.defaultSession.closeAllConnections();
+          await session.fromPartition('persist:main').closeAllConnections();
+          await session.fromPartition('incognito').closeAllConnections();
+        } catch (err) {}
+        return { success: true };
+      }
+      const pRules = config?.proxyRules || '';
+      const mode = config?.mode || (pRules ? 'fixed_servers' : 'direct');
+      await session.defaultSession.setProxy({ proxyRules: pRules, mode });
+      await session.fromPartition('persist:main').setProxy({ proxyRules: pRules, mode });
+      await session.fromPartition('incognito').setProxy({ proxyRules: pRules, mode });
+      return { success: true };
+    } catch (e) {
+      console.error('Failed to set proxy:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // --- Vault Handlers ---
+  const vaultStore = require('./vaultStore');
+
+  ipcMain.handle('vault:getAllCredentials', () => {
+    return vaultStore.getAll();
+  });
+
+  ipcMain.handle('vault:getCredentials', (event, domain) => {
+    return vaultStore.getByDomain(domain);
+  });
+
+  ipcMain.handle('vault:saveCredential', (event, { domain, username, password }) => {
+    return vaultStore.addCredential(domain, username, password);
+  });
+
+  ipcMain.handle('vault:deleteCredential', (event, { id }) => {
+    return vaultStore.deleteCredential(id);
+  });
+
+  ipcMain.handle('vault:promptSave', (event, { domain, username, password }) => {
+    const wins = BrowserWindow.getAllWindows();
+    if (wins.length > 0) {
+      wins[0].webContents.send('vault:onPromptSave', { domain, username, password });
+    }
+    return true;
+  });
 
 });
 app.on("window-all-closed", () => {

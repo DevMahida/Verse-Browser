@@ -92,6 +92,13 @@ async function enableShieldsOnSession(targetSession) {
     const blocker = await getBlocker();
     attachBlockEvents(blocker);
     blocker.enableBlockingInSession(targetSession);
+
+    // Disable Ghostery's cosmetic filter preload script
+    // This script uses `fun-hooks` to wrap native DOM APIs (querySelector, etc), 
+    // which causes "Maximum call stack size exceeded" infinite loops on modern React apps (like ChatGPT).
+    const preloads = targetSession.getPreloads();
+    targetSession.setPreloads(preloads.filter(p => !p.includes('adblocker-electron') && !p.includes('ghostery')));
+
     attachAdvancedSessionFilters(targetSession);
   } catch (err) {
     if (err.message && err.message.includes('Attempted to register a second handler')) {
@@ -162,21 +169,24 @@ function attachAdvancedSessionFilters(targetSession) {
 
   targetSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
     let modified = false;
+    let requestHeaders = details.requestHeaders;
     try {
       const url = new URL(details.url);
       const host = url.hostname;
       if (fastIsEnabled(host)) {
         const cookieLevel = fastGetSetting(host, 'cookieLevel', 'cross-site');
         if (cookieLevel === 'all') {
-          if (details.requestHeaders['Cookie']) {
-            delete details.requestHeaders['Cookie'];
+          if (requestHeaders['Cookie'] || requestHeaders['cookie']) {
+            requestHeaders = { ...details.requestHeaders };
+            delete requestHeaders['Cookie'];
+            delete requestHeaders['cookie'];
             modified = true;
           }
         }
       }
     } catch(e) {}
     if (modified) {
-      callback({ requestHeaders: details.requestHeaders });
+      callback({ requestHeaders: requestHeaders });
     } else {
       callback({ cancel: false });
     }
@@ -184,25 +194,24 @@ function attachAdvancedSessionFilters(targetSession) {
 
   targetSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
     let modified = false;
+    let responseHeaders = details.responseHeaders;
     try {
       const url = new URL(details.url);
       const host = url.hostname;
       if (fastIsEnabled(host)) {
         const cookieLevel = fastGetSetting(host, 'cookieLevel', 'cross-site');
         if (cookieLevel === 'all') {
-          if (details.responseHeaders['Set-Cookie']) {
-            delete details.responseHeaders['Set-Cookie'];
-            modified = true;
-          }
-          if (details.responseHeaders['set-cookie']) {
-            delete details.responseHeaders['set-cookie'];
+          if (responseHeaders['Set-Cookie'] || responseHeaders['set-cookie']) {
+            responseHeaders = { ...details.responseHeaders };
+            delete responseHeaders['Set-Cookie'];
+            delete responseHeaders['set-cookie'];
             modified = true;
           }
         }
       }
     } catch(e) {}
     if (modified) {
-      callback({ responseHeaders: details.responseHeaders });
+      callback({ responseHeaders: responseHeaders });
     } else {
       callback({ cancel: false });
     }

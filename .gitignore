@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# electron-builder output
+/dist
+
+# scratch / debug files
+/scratch
+
 # vercel
 .vercel
 

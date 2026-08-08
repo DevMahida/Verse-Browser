@@ -1,4 +1,4 @@
-const { WebContentsView, ipcMain, BrowserWindow, app } = require('electron');
+const { WebContentsView, ipcMain, BrowserWindow, app, session } = require('electron');
 const profileManager = require('./profileManager');
 const { attachNavigationShields, attachCosmeticFilters } = require('./verseShield');
 const { showPopupWindow, closePopupWindow, initSuggestionsPopup, showSuggestionsPopup, hideSuggestionsPopup, resizeSuggestionsPopup, sendSuggestionsUpdate } = require('./popupManager');
@@ -8,6 +8,73 @@ const isDev = !app.isPackaged;
 const views = new Map(); // tabId -> WebContentsView
 let isInitialized = false;
 let globalForceDarkEnabled = false;
+
+// --- Bug 1 Fix: Implement applyForceDarkToView ---
+// Uses Chromium's built-in dark mode CSS injection via webContents.insertCSS.
+function applyForceDarkToView(view, enabled, url) {
+  if (!view || view.webContents.isDestroyed()) return;
+  try {
+    if (enabled) {
+      // Skip internal pages and already-dark sites
+      const currentUrl = url || view.webContents.getURL();
+      if (currentUrl.startsWith('browser://') || currentUrl.startsWith('chrome://') || currentUrl === '') return;
+
+      view.webContents.insertCSS(`
+        :root {
+          color-scheme: dark !important;
+        }
+        html {
+          filter: invert(1) hue-rotate(180deg) !important;
+        }
+        html img, html video, html canvas, html svg, html [style*="background-image"] {
+          filter: invert(1) hue-rotate(180deg) !important;
+        }
+      `).catch(() => {});
+    } else {
+      // Remove dark mode by reloading — insertCSS doesn't have a remove API
+      // In practice, toggling off triggers a reload anyway
+    }
+  } catch (e) {
+    console.error('[TabManager] applyForceDarkToView error:', e.message);
+  }
+}
+
+// --- Bug 1 Fix: Implement openGoogleAuthPopup ---
+// Opens Google sign-in in the user's system browser (RFC 8252 OAuth for Native Apps),
+// then links the resulting account to the active profile.
+function openGoogleAuthPopup(view, partition) {
+  const { signInWithGoogle } = require('./googleAuth');
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error('[TabManager] Google OAuth credentials not configured.');
+    return;
+  }
+
+  signInWithGoogle({ clientId, clientSecret })
+    .then(({ tokens, profile }) => {
+      // Extract the profileId from the partition string (e.g. 'persist:main' → 'main')
+      const profileId = partition.replace('persist:', '') || 'main';
+      profileManager.linkGoogleAccount(profileId, { tokens, profile });
+
+      // Notify the renderer that sign-in succeeded so it can update the UI
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('tab-event', {
+            tabId: null,
+            eventName: 'google-signin-success',
+            data: { email: profile.email, name: profile.name, picture: profile.picture }
+          });
+        }
+      }
+
+      console.log(`[TabManager] Google sign-in successful for ${profile.email}`);
+    })
+    .catch((err) => {
+      console.error('[TabManager] Google sign-in failed:', err.message);
+    });
+}
 
 const isGoogleAuthUrl = (url) => {
   if (!url) return false;
@@ -49,6 +116,7 @@ function initTabManager() {
     // Make sure we have a solid background color so it's not transparent
     view.setBackgroundColor('#ffffff');
     view._isAttached = false;
+    view._parentWindow = win;
     views.set(tabId, view);
 
     // Attach Verse Shield navigation guards (HTTPS upgrade + tracking-param stripping)
@@ -113,13 +181,42 @@ function initTabManager() {
       if (errorCode !== -3) forwardEvent('did-fail-load', { errorCode, errorDescription });
     });
 
-    view.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      try {
-        const fs = require('fs');
-        const logPath = 'C:\\Users\\Admin\\.gemini\\antigravity-ide\\brain\\f834f673-3d34-41ac-823e-7cce8eea0470\\scratch\\tab_console.log';
-        fs.appendFileSync(logPath, `[Tab ${tabId}] ${message}\n`);
-      } catch (e) { }
+    view.webContents.on('close', (e) => {
+      console.log(`[TabManager] webContents close event fired for tab ${tabId}`);
+      
+      // If we are on a pw.live watch page, the video player's broken script 
+      // calls window.top.close() when the back button is clicked. 
+      // We must intercept this at the native level and force a goBack() instead!
+      // BUT only if we CAN go back. If they opened it in a new tab (canGoBack is false), 
+      // we actually WANT to close the tab!
+      const currentUrl = view.webContents.getURL();
+      if (currentUrl.includes('pw.live') && currentUrl.includes('/watch/')) {
+        if (view.webContents.canGoBack()) {
+          console.log(`[TabManager] Intercepting window.close() on pw.live/watch, forcing goBack()`);
+          e.preventDefault();
+          view.webContents.goBack();
+          return;
+        } else {
+          console.log(`[TabManager] pw.live/watch called window.close() on a new tab, allowing tab to close.`);
+          // let it fall through and close
+        }
+      }
+
+      if (!view._isDestroying) {
+        forwardEvent('close');
+      }
     });
+
+    // Bug 2 Fix: Removed hardcoded debug log path.
+    // Tab console messages are forwarded to Electron's stdout in dev mode only.
+    if (isDev) {
+      view.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        // Only log warnings and errors to avoid flooding stdout
+        if (level >= 2) {
+          console.log(`[Tab ${tabId}] ${message}`);
+        }
+      });
+    }
 
     views.set(tabId, view);
 
@@ -137,8 +234,9 @@ function initTabManager() {
       }
 
       // Otherwise open a new tab in the browser
-      if (!sender.isDestroyed()) {
-        sender.send('webview-new-window', { url });
+      const win = view._parentWindow;
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('webview-new-window', { url });
       }
       return { action: 'deny' };
     });
@@ -160,8 +258,38 @@ function initTabManager() {
       });
     });
 
+    view.webContents.on('enter-html-full-screen', () => {
+      console.log(`[Tab ${tabId}] enter-html-full-screen fired`);
+      view._isHtmlFullScreen = true;
+      const win = view._parentWindow;
+      console.log(`[Tab ${tabId}] Parent window found:`, !!win);
+      if (win && !win.isDestroyed()) {
+        view._preFullScreenBounds = view.getBounds();
+        
+        const updateBoundsForFullScreen = () => {
+          if (!view._isHtmlFullScreen) return;
+          const bounds = win.getContentBounds();
+          view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+        };
+        
+        win.once('enter-full-screen', updateBoundsForFullScreen);
+        win.setFullScreen(true);
+        // Fallback in case it's already full screen or event doesn't fire
+        setTimeout(updateBoundsForFullScreen, 100);
+      }
+    });
 
-
+    view.webContents.on('leave-html-full-screen', () => {
+      console.log(`[Tab ${tabId}] leave-html-full-screen fired`);
+      view._isHtmlFullScreen = false;
+      const win = view._parentWindow;
+      if (win && !win.isDestroyed()) {
+        win.setFullScreen(false);
+        if (view._preFullScreenBounds) {
+          view.setBounds(view._preFullScreenBounds);
+        }
+      }
+    });
 
     if (url) {
       if (url.startsWith('view-source:')) {
@@ -213,6 +341,7 @@ function initTabManager() {
         view._isAttached = false;
       }
       if (!view.webContents.isDestroyed()) {
+        view._isDestroying = true;
         view.webContents.close();
       }
       views.delete(tabId);
@@ -225,7 +354,9 @@ function initTabManager() {
     const window = BrowserWindow.fromWebContents(event.sender);
 
     if (view && window && !window.isDestroyed()) {
-      view.setBounds(bounds);
+      if (!view._isHtmlFullScreen) {
+        view.setBounds(bounds);
+      }
 
       const isAttached = view._isAttached;
 
@@ -418,8 +549,18 @@ function initTabManager() {
     }
   });
 
-  // Execute arbitrary JavaScript in a tab's webContents (used by AISidebar, NavigationBar, and MCP bridge)
+  // Execute JavaScript in a tab's webContents (used by AISidebar, NavigationBar, and MCP bridge)
+  // Bug 5 Fix: Validate that the caller is a host BrowserWindow's renderer, not a tab webContents
   ipcMain.handle('tab-execute-js', async (event, { tabId, code }) => {
+    // Security: Only the main BrowserWindow renderer (our React UI) may call this.
+    // Tab webContents (website pages) do NOT have access to this IPC because they
+    // use tab-preload.js (which doesn't expose electron APIs), not preload.js.
+    const callerWin = BrowserWindow.fromWebContents(event.sender);
+    if (!callerWin) {
+      console.warn('[TabManager] tab-execute-js rejected: caller is not a BrowserWindow');
+      return null;
+    }
+
     const view = views.get(tabId);
     if (!view || view.webContents.isDestroyed()) return null;
     try {
@@ -454,9 +595,10 @@ function initTabManager() {
     const isIncognito = parentWin ? parentWin._isIncognito : false;
     const partition = isIncognito ? 'incognito' : profileManager.partitionFor(profileId);
     
-    const baseUrl = isDev ? 'http://localhost:3000' : `file://${path.join(__dirname, '..', 'out', 'index.html')}`;
+    // Bug 3 Fix: Use file:// paths in production instead of localhost:3000
+    const baseUrl = isDev ? 'http://localhost:3000' : `file://${path.join(__dirname, '..', 'out')}`;
     
-    initSuggestionsPopup(parentWin, partition, isDev ? baseUrl : 'http://localhost:3000'); // Note: For statically exported Next.js, loading the URL may require special routing if not dev, but Verse runs Next.js server usually. Assuming baseUrl is fine. Wait, let's just use the same logic as open-popup.
+    initSuggestionsPopup(parentWin, partition, baseUrl);
     
     showSuggestionsPopup(x, y, width, height);
   });
@@ -485,6 +627,37 @@ function initTabManager() {
     if (mainWin) {
       mainWin.webContents.send('tab-event', { action: 'open-tab', url: url || 'browser://extensions' });
     }
+  });
+
+  // --- Overlay helpers: hide / show all attached tab views ---
+  // React modals (VPN, etc.) are rendered in the main renderer and sit BELOW
+  // native WebContentsViews. These handlers temporarily detach all views so
+  // the React overlay is visible, then re-attach them when the overlay closes.
+  const _hiddenViews = new Set(); // track which views we hid
+
+  ipcMain.on('tab-views-hide', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) return;
+    _hiddenViews.clear();
+    for (const [tabId, view] of views) {
+      if (view._isAttached) {
+        try { window.contentView.removeChildView(view); } catch (e) {}
+        _hiddenViews.add(tabId);
+      }
+    }
+  });
+
+  ipcMain.on('tab-views-show', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) return;
+    for (const tabId of _hiddenViews) {
+      const view = views.get(tabId);
+      if (view && !view.webContents.isDestroyed()) {
+        try { window.contentView.addChildView(view); } catch (e) {}
+        view._isAttached = true;
+      }
+    }
+    _hiddenViews.clear();
   });
 }
 

@@ -9,6 +9,7 @@ import FindBar from "../toolbar/FindBar";
 import AISidebar from "../ai/AISidebar";
 import WebviewContainer from "../browser/WebviewContainer";
 import ClearDataModal from "../modals/ClearDataModal";
+import SavePasswordPrompt from "../toolbar/SavePasswordPrompt";
 
 
 
@@ -487,6 +488,12 @@ export default function BrowserLayout() {
       useBrowserStore.getState().updateDownload(data.id, data);
     });
 
+    if (window.electron.onPermissionUpdated) {
+      window.electron.onPermissionUpdated(({ origin, permission, granted }) => {
+        useBrowserStore.getState().updateSessionPermission(origin, permission, granted);
+      });
+    }
+
     if (window.electron?.tabManager?.onTabEvent) {
       const cleanup = window.electron.tabManager.onTabEvent((data) => {
         if (data && data.action === 'open-tab') {
@@ -530,6 +537,7 @@ export default function BrowserLayout() {
 
       {/* Clear Data Modal */}
       <ClearDataModal />
+      <SavePasswordPrompt />
     </div>
   );
 }

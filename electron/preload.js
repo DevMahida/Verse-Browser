@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electron", {
     capturePage: (tabId) => ipcRenderer.invoke('tab-capture-page', tabId),
     focusTab: (tabId) => ipcRenderer.send('tab-focus', tabId),
     fetchSource: (data) => ipcRenderer.invoke('fetch-source', data),
+    hideViews: () => ipcRenderer.send('tab-views-hide'),
+    showViews: () => ipcRenderer.send('tab-views-show'),
     openPopup: (data) => ipcRenderer.send('open-popup', data),
     closePopup: () => ipcRenderer.send('close-popup'),
     resizePopup: (data) => ipcRenderer.send('resize-popup', data),
@@ -145,6 +147,24 @@ contextBridge.exposeInMainWorld("electron", {
 
   // AI Assistant Request
   aiRequest: (payload) => ipcRenderer.invoke('ai-request', payload),
+  aiChat: (payload) => ipcRenderer.invoke('ai-chat', payload),
+
+  // VPN
+  vpn: {
+    setProxy: (config) => ipcRenderer.invoke('vpn:setProxy', config)
+  },
+
+  // Vault Password Manager
+  vault: {
+    getAllCredentials: () => ipcRenderer.invoke('vault:getAllCredentials'),
+    getCredentials: (domain) => ipcRenderer.invoke('vault:getCredentials', domain),
+    saveCredential: (domain, username, password) => ipcRenderer.invoke('vault:saveCredential', { domain, username, password }),
+    deleteCredential: (id) => ipcRenderer.invoke('vault:deleteCredential', { id }),
+    onPromptSaveCredential: (callback) => {
+      ipcRenderer.on('vault:onPromptSave', (event, data) => callback(data));
+      return () => ipcRenderer.removeAllListeners('vault:onPromptSave');
+    }
+  },
 
   // --- Database Methods removed for Firebase ---
 
@@ -173,6 +193,11 @@ contextBridge.exposeInMainWorld("electron", {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('permission-request', handler);
     return () => ipcRenderer.removeListener('permission-request', handler);
+  },
+  onPermissionUpdated: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('permission-updated', handler);
+    return () => ipcRenderer.removeListener('permission-updated', handler);
   },
   respondToPermission: (data) => ipcRenderer.send('permission-response', data),
   revokePermission: (data) => ipcRenderer.send('revoke-permission', data),

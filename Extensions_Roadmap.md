@@ -49,6 +49,7 @@ This document categorizes all planned and candidate browser extensions for **Ver
 | **22. Custom Script & CSS Injector (Tampermonkey Lite)** | User script manager supporting GM_* polyfills, custom triggers, and execution timing. | Isolated content script sandbox + custom GM API polyfills + script store. |
 | **23. HTTP Header & Request Modifier** | Intercept, modify, or add HTTP request/response headers (e.g., CORS bypass). | Intercepting `webRequest.onBeforeSendHeaders` & `onHeadersReceived`. |
 | **24. Chromium `.crx` WebExtensions Compatibility Host** | Support installing and running standard Chrome Web Extensions directly. | `session.defaultSession.loadExtension()` + extension popup action bar UI renderer. |
+| **25. Built-in Free VPN** | Secure browsing and bypass geographical restrictions with an integrated virtual private network proxy. | Electron `session.setProxy()` integration with external VPN nodes. |
 
 ---
 
@@ -80,6 +81,7 @@ graph TD
         C2[Tampermonkey Lite User Scripts]
         C3[Chromium .crx WebExtensions Loader]
         C4[AI Deep Research Fact Checker]
+        C5[Built-in Free VPN]
     end
 ```
 

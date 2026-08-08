@@ -12,36 +12,19 @@ import ReactMarkdown from "react-markdown";
 import { useResizableWidth } from "@/hooks/useResizableWidth";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 
-// Available OpenRouter models — slugs verified from /api/v1/models (2026-07-13)
+// Available OpenRouter models — slugs verified from /api/v1/models (2026-08-08)
 const AI_MODELS = [
-  // ── Meta Llama ──────────────────────────────────────────────
-  { group: "Meta",     label: "Llama 3.1 8B",          value: "meta-llama/llama-3.1-8b-instruct" },
-  { group: "Meta",     label: "Llama 3.1 70B",          value: "meta-llama/llama-3.1-70b-instruct" },
-  { group: "Meta",     label: "Llama 3.3 70B",          value: "meta-llama/llama-3.3-70b-instruct" },
-  { group: "Meta",     label: "Llama 4 Scout",          value: "meta-llama/llama-4-scout" },
-  { group: "Meta",     label: "Llama 4 Maverick",       value: "meta-llama/llama-4-maverick" },
-  // ── Google ──────────────────────────────────────────────────
-  { group: "Google",   label: "Gemini 2.5 Flash",       value: "google/gemini-2.5-flash" },
-  { group: "Google",   label: "Gemini 2.5 Pro",         value: "google/gemini-2.5-pro" },
-  { group: "Google",   label: "Gemma 3 27B",            value: "google/gemma-3-27b-it" },
-  // ── Anthropic ───────────────────────────────────────────────
-  { group: "Anthropic",label: "Claude Sonnet 4.6",      value: "anthropic/claude-sonnet-4.6" },
-  { group: "Anthropic",label: "Claude Haiku 4.5",       value: "anthropic/claude-haiku-4.5" },
-  // ── DeepSeek ────────────────────────────────────────────────
-  { group: "DeepSeek", label: "DeepSeek R1",            value: "deepseek/deepseek-r1" },
-  { group: "DeepSeek", label: "DeepSeek V3 Chat",       value: "deepseek/deepseek-chat-v3-0324" },
-  { group: "DeepSeek", label: "DeepSeek R1 Distill 70B",value: "deepseek/deepseek-r1-distill-llama-70b" },
-  // ── Mistral ─────────────────────────────────────────────────
-  { group: "Mistral",  label: "Mistral Large 2512",     value: "mistralai/mistral-large-2512" },
-  { group: "Mistral",  label: "Mistral Small 3.2 24B",  value: "mistralai/mistral-small-3.2-24b-instruct" },
-  { group: "Mistral",  label: "Mistral Nemo",           value: "mistralai/mistral-nemo" },
-  // ── Qwen ────────────────────────────────────────────────────
-  { group: "Qwen",     label: "Qwen 3 235B",            value: "qwen/qwen3-235b-a22b" },
-  { group: "Qwen",     label: "Qwen 2.5 72B",           value: "qwen/qwen-2.5-72b-instruct" },
-  // ── OpenAI ──────────────────────────────────────────────────
-  { group: "OpenAI",   label: "GPT-4o",                 value: "openai/gpt-4o" },
-  { group: "OpenAI",   label: "GPT-4o Mini",            value: "openai/gpt-4o-mini" },
+  { group: "Google",   label: "Gemma 4 31B",               value: "google/gemma-4-31b-it:free" },
+  { group: "Nvidia",   label: "Nemotron 3 Ultra 550B",     value: "nvidia/nemotron-3-ultra-550b-a55b:free" },
+  { group: "Nvidia",   label: "Nemotron 3 Super 120B",     value: "nvidia/nemotron-3-super-120b-a12b:free" },
+  { group: "OpenAI",   label: "GPT OSS 20B",               value: "openai/gpt-oss-20b:free" },
+  { group: "Google",   label: "Gemma 4 26B",               value: "google/gemma-4-26b-a4b-it:free" },
+  { group: "Nvidia",   label: "Nemotron 3 Nano Omni",      value: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" },
+  { group: "Cohere",   label: "North Mini Code",           value: "cohere/north-mini-code:free" },
+  { group: "Poolside", label: "Laguna S 2.1",              value: "poolside/laguna-s-2.1:free" },
+  { group: "Auto",     label: "Auto Free Router",          value: "openrouter/free" },
 ];
+
 
 function formatRelativeTime(ts) {
   const diff = Date.now() - ts;
@@ -236,6 +219,21 @@ export default function AISidebar() {
   };
 
   const messagesEndRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const inputRef = useRef(null);
+  
+  // Validate selected model against available free models (removes persisted paid models)
+  useEffect(() => {
+    if (selectedAiModel) {
+      const isValid = AI_MODELS.some(m => m.value === selectedAiModel);
+      if (!isValid) {
+        setSelectedAiModel("google/gemma-4-31b-it:free");
+      }
+    } else {
+      setSelectedAiModel("google/gemma-4-31b-it:free");
+    }
+  }, [selectedAiModel, setSelectedAiModel]);
+
   const isProcessingRef = useRef(false);
   const abortControllerRef = useRef(null);
   const modelMenuRef = useRef(null);
@@ -369,6 +367,30 @@ export default function AISidebar() {
 
   const getPageContent = async (type = "text") => {
     const tabId = focusedPane === "secondary" && splitTabId ? splitTabId : activeTabId;
+    const currentTab = tabs?.find(t => t.id === tabId) || {};
+
+    // If the active tab is the New Tab page (rendered in React, not WebContents)
+    if (currentTab.url === 'browser://newtab' || !currentTab.url) {
+      try {
+        if (type === "selected") {
+          return window.getSelection().toString();
+        } else {
+          const container = document.getElementById("newtab-content-container");
+          if (container) {
+            const clone = container.cloneNode(true);
+            ['script','style','noscript','svg','iframe'].forEach(tag => {
+              clone.querySelectorAll(tag).forEach(el => el.remove());
+            });
+            return clone.innerText || clone.textContent || '';
+          }
+          return "";
+        }
+      } catch (e) {
+        console.error("Failed to extract new tab content", e);
+        return "";
+      }
+    }
+
     if (!window.electron || !window.electron.tabManager) return "";
     try {
       if (type === "selected") {
@@ -726,6 +748,33 @@ export default function AISidebar() {
       const pageText = await getPageContent("text");
       const selectedText = await getPageContent("selected");
       
+      abortControllerRef.current = new AbortController();
+
+      // Format conversation history for the AI, ignoring internal system messages
+      const initialChatHistory = messages
+        .filter(m => m.role !== 'system' && m.role !== 'error')
+        .map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+      initialChatHistory.push({ role: "user", content: query });
+
+      const executeAICall = async (chatHistoryToSend, depth = 0) => {
+        if (depth >= 5) {
+           setMessages(prev => [...prev, { role: "assistant", content: "I've reached my maximum number of tool actions. Please try asking in a different way or be more specific.", model: selectedAiModel }]);
+           return;
+        }
+        let systemPrompt = "You are a helpful, intelligent AI assistant built into the Verse Browser.\n";
+        systemPrompt += `The current date and time is: ${new Date().toLocaleString()}.\n`;
+        systemPrompt += "Please format your responses using Markdown for readability. Use bolding for key terms, short paragraphs, and bullet points where appropriate. Keep answers concise, clear, and visually structured. If the user just says 'hi' or greets you, respond with a very short, polite greeting (e.g. 'Hi there! How can I help you today?') and nothing more.\n";
+        systemPrompt += "Answer the user's questions utilizing your general knowledge. If the user asks about the current page content, refer to the provided context below.\n\n";
+      if (pageText) {
+        systemPrompt += `--- PAGE CONTEXT ---\nURL: ${currentTab.url || 'Unknown'}\nTitle: ${currentTab.title || 'Unknown'}\n\nText:\n${(pageText || "").substring(0, 15000)}\n\n`;
+      }
+      if (selectedText) {
+        systemPrompt += `--- SELECTED TEXT ---\n${(selectedText || "").substring(0, 2000)}\n\n`;
+      }
+
       let mcp_tools = "";
       try {
         if (window.electron.mcpClient) {
@@ -739,24 +788,34 @@ export default function AISidebar() {
         }
       } catch(e) { console.error("MCP fetch error", e); }
 
-      abortControllerRef.current = new AbortController();
-      // Use IPC for RAG chat request
-      const result = await window.electron.aiRequest({
-        endpoint: "/rag",
-        payload: buildPayload({
-          text: (pageText || "").substring(0, 15000),
-          query,
-          title: currentTab.title || "",
-          url: currentTab.url || "",
-          selected_text: (selectedText || "").substring(0, 2000),
-          mcp_tools,
-        })
+      let all_tools_prompt = "";
+      // Add native built-in browser tools
+      const native_tools = [
+        {
+           server: "browser",
+           tools: [
+             { name: "get_weather", description: "Get the live weather for a specific city or location.", inputSchema: { type: "object", properties: { location: { type: "string" } }, required: ["location"] } },
+             { name: "web_search", description: "Search the live web for information, including videos, news, facts, and more.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } }
+           ]
+        }
+      ];
+      
+      const combined_tools = mcp_tools ? native_tools.concat(JSON.parse(mcp_tools)) : native_tools;
+      all_tools_prompt = `\n--- AVAILABLE TOOLS ---\nYou have access to the following tools. To call a tool, output exactly this syntax on a new line: [TOOL_CALL: serverName.toolName {"arg1": "value"}]\n${JSON.stringify(combined_tools)}\nNote: If you call a tool, only output the TOOL_CALL and wait for the system to provide the result before generating your final answer.\n`;
+      systemPrompt += all_tools_prompt;
+
+      const fullMessages = [{ role: "system", content: systemPrompt }, ...chatHistoryToSend];
+
+      const result = await window.electron.aiChat({
+        messages: fullMessages,
+        model: selectedAiModel,
+        apiKey: openRouterApiKey || undefined
       });
 
       if (abortControllerRef.current.signal.aborted) throw new Error("AbortError");
       if (result.error) throw new Error(result.error);
       
-      let responseText = result.answer || result.result || "No response received.";
+      let responseText = result.answer || "No response received.";
       const toolCallMatch = responseText.match(/\[TOOL_CALL:\s*([^\s]+)\s+(.*?)\]/is);
       
       if (toolCallMatch) {
@@ -766,7 +825,7 @@ export default function AISidebar() {
          
          responseText = responseText.replace(fullMatch, "").trim();
          if (responseText) {
-            setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
+            setMessages(prev => [...prev, { role: "assistant", content: responseText, model: result.usedModel || selectedAiModel }]);
          }
          
          const [serverName, toolName] = toolPath.split('.');
@@ -776,18 +835,67 @@ export default function AISidebar() {
          setMessages(prev => [...prev, { role: "system", content: `Executing tool ${serverName}.${toolName}...` }]);
          
          try {
-           const mcpRes = await window.electron.mcpClient.callTool(serverName, toolName, parsedArgs);
-           const resultStr = mcpRes?.content?.[0]?.text || JSON.stringify(mcpRes) || "Success";
-           setMessages(prev => [...prev, { role: "system", content: `Tool result:\n${resultStr.substring(0,2000)}` }]);
+           let resultStr = "";
+           if (serverName === "browser") {
+              if (toolName === "get_weather") {
+                const weatherRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(parsedArgs.location)}&count=1&language=en&format=json`);
+                const geoData = await weatherRes.json();
+                if (!geoData.results || geoData.results.length === 0) {
+                  resultStr = "Location not found.";
+                } else {
+                  const loc = geoData.results[0];
+                  const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m&timezone=auto`);
+                  const wxData = await wxRes.json();
+                  resultStr = `Weather in ${loc.name}, ${loc.country}: Temperature ${wxData.current.temperature_2m}C (Feels like ${wxData.current.apparent_temperature}C), Humidity ${wxData.current.relative_humidity_2m}%, Wind ${wxData.current.wind_speed_10m} km/h.`;
+                }
+              } else if (toolName === "web_search") {
+                // Free HTML scraper for DuckDuckGo HTML using main process fetch to bypass CORS
+                const ddgHtml = await window.electron.tabManager.fetchSource({ url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(parsedArgs.query)}` });
+                // Extremely simple regex scraper to extract snippet texts
+                const snippets = [...ddgHtml.matchAll(/<a class="result__snippet[^>]*>(.*?)<\/a>/gi)];
+                const results = snippets.slice(0, 5).map(s => s[1].replace(/(<([^>]+)>)/gi, "").trim());
+                resultStr = results.length > 0 ? "Latest web results:\n" + results.join("\n- ") : "No results found.";
+              } else {
+                resultStr = "Unknown browser tool.";
+              }
+           } else {
+             const mcpRes = await window.electron.mcpClient.callTool(serverName, toolName, parsedArgs);
+             resultStr = mcpRes?.content?.[0]?.text || JSON.stringify(mcpRes) || "Success";
+           }
+           
+           // Automatically push result back to AI to continue answering
+           // Note: We use 'user' role here because many LLMs (like Gemini/Claude) require alternating user/assistant turns
+           // and will return empty responses if the final message is a 'system' role.
+           const newHistory = [...chatHistoryToSend, 
+             { role: "assistant", content: (responseText ? responseText + "\n" : "") + fullMatch, model: result.usedModel || selectedAiModel },
+             { role: "user", content: `Tool result:\n${resultStr.substring(0,2000)}` }
+           ];
+           setMessages(prev => {
+              // Replace the 'Executing tool...' message with the actual result
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: "system", content: `Tool result:\n${resultStr.substring(0,2000)}` };
+              return updated;
+           });
+           
+           // Trigger a recursive call immediately with the tool result
+           return await executeAICall(newHistory, depth + 1);
          } catch (e) {
            setMessages(prev => [...prev, { role: "system", content: `Tool failed: ${e.message}` }]);
          }
       } else {
-         setMessages(prev => [...prev, { role: "assistant", content: responseText, model: selectedAiModel }]);
+         setMessages(prev => [...prev, { role: "assistant", content: responseText, model: result.usedModel || selectedAiModel }]);
       }
+    };
+
+    await executeAICall(initialChatHistory);
+
     } catch (e) {
       if (e.name === "AbortError") {
         setMessages(prev => [...prev, { role: "assistant", content: "Response stopped.", model: selectedAiModel }]);
+      } else if (e.message?.includes("402") || e.message?.includes("Insufficient credits")) {
+        setMessages(prev => [...prev, { role: "assistant", content: "Your OpenRouter account does not have enough credits for this premium model.\n\n**Note:** Premium credits are pre-paid and do not refill automatically over time. Please switch to a **Free** model from the dropdown menu, or purchase credits at openrouter.ai/settings/credits.", model: null }]);
+      } else if (e.message?.includes("429") || e.message?.includes("rate limit") || e.message?.includes("Rate limit")) {
+        setMessages(prev => [...prev, { role: "assistant", content: "You have hit the global rate limit across all free models on your connection.\n\nFree models have a shared requests-per-minute limit. Please wait about 30 seconds and try again.", model: null }]);
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: `Error: ${e.message}`, model: null }]);
       }
@@ -1156,9 +1264,26 @@ export default function AISidebar() {
           </>
         ) : (
           <div className="flex flex-col space-y-4">
-            {messages.map((msg, idx) => (
+            {messages.map((msg, idx) => {
+              if (msg.role === "system") {
+                const isError = msg.content.startsWith("Tool failed:");
+                const displayText = msg.content
+                  .replace(/^Tool result:\nLatest web results:\n/, 'Found web results: ')
+                  .replace(/^Tool result:\n/, 'Found tool data: ');
+                  
+                return (
+                  <div key={idx} className="flex justify-center w-full my-1">
+                    <span className={`text-[10px] px-3 py-1 rounded-full flex items-center gap-1.5 max-w-[80%] ${isError ? 'bg-red-500/10 text-red-400' : 'bg-surface border border-border text-foreground/50'}`}>
+                       {isError ? <HelpCircle size={10} className="shrink-0" /> : <Globe size={10} className="shrink-0" />}
+                       <span className="truncate">{displayText}</span>
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
               <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"} group/msg relative w-full`}>
-                <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm ${
+                <div className={`px-4 py-2.5 rounded-2xl max-w-[90%] text-sm shadow-sm break-words ${
                   msg.role === "user"
                     ? msg.isResearch
                       ? "bg-linear-to-r from-violet-600 to-blue-600 text-white rounded-br-sm whitespace-pre-wrap"
@@ -1331,7 +1456,8 @@ export default function AISidebar() {
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
 
             {/* Research in-progress indicator */}
             {isLoading && researchMode && researchStatus === "researching" && (

@@ -4,9 +4,24 @@ import { Puzzle, Settings, Pin } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function ExtensionsPopup({ onClose, isStandalone }) {
-  const { installedExtensions, toggleExtension, togglePinExtension, openExtensionsTab } = useBrowserStore();
+  const { installedExtensions, toggleExtension, togglePinExtension, openExtensionsTab, vpnEnabled, vaultUnlocked, setVaultUnlocked, setShowVpnModal } = useBrowserStore();
   const profileId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('profileId') || 'main' : 'main';
   
+  React.useEffect(() => {
+    const bc = new BroadcastChannel('verse-browser-extensions');
+    bc.onmessage = (event) => {
+      if (event.data?.type === 'SYNC_VPN_STATE') {
+        useBrowserStore.setState({ 
+          vpnEnabled: event.data.vpnEnabled, 
+          vaultUnlocked: event.data.vaultUnlocked 
+        });
+      }
+    };
+    // Request current runtime state from main window when popup opens
+    bc.postMessage({ type: 'REQUEST_VPN_STATE' });
+    return () => bc.close();
+  }, []);
+
   const handleManageExtensions = () => {
     if (window.electron && window.electron.tabManager && window.electron.tabManager.openNewTab) {
       window.electron.tabManager.openNewTab({ url: 'browser://extensions' });
@@ -19,9 +34,50 @@ export default function ExtensionsPopup({ onClose, isStandalone }) {
     if (onClose) onClose();
   };
 
+  const handleToggleExtension = (extId) => {
+    toggleExtension(extId);
+    const bc = new BroadcastChannel('verse-browser-extensions');
+    bc.postMessage({ type: 'SYNC_EXTENSIONS' });
+    
+    if (extId === 'ext-vpn') {
+      const isNowEnabled = useBrowserStore.getState().installedExtensions.find(e => e.id === 'ext-vpn')?.isEnabled;
+      if (isNowEnabled) {
+        bc.postMessage({ type: 'SHOW_VPN_MODAL' });
+        if (onClose) onClose();
+      } else {
+        useBrowserStore.setState({ vpnEnabled: false, vpnLocation: null, vpnProxyServer: '' });
+        bc.postMessage({ type: 'CLEAR_VPN' });
+      }
+    }
+    
+    setTimeout(() => bc.close(), 500);
+  };
+
+  const handleTogglePin = (extId) => {
+    togglePinExtension(extId);
+    const bc = new BroadcastChannel('verse-browser-extensions');
+    bc.postMessage({ type: 'SYNC_EXTENSIONS' });
+    setTimeout(() => bc.close(), 500);
+  };
+
   const handleExtensionClick = (ext, e) => {
     // Don't trigger click when clicking toggle/pin buttons
     if (e.target.closest('button') || e.target.closest('label')) return;
+
+    if (!ext.isEnabled) return;
+
+    if (ext.id === 'ext-vpn') {
+      const bc = new BroadcastChannel('verse-browser-extensions');
+      bc.postMessage({ type: 'SHOW_VPN_MODAL' });
+      bc.close();
+      if (onClose) onClose();
+    } else if (ext.id === 'ext-vault') {
+      const nextState = !vaultUnlocked;
+      setVaultUnlocked(nextState);
+      const bc = new BroadcastChannel('verse-browser-extensions');
+      bc.postMessage({ type: 'TOGGLE_VAULT', state: nextState });
+      setTimeout(() => bc.close(), 500);
+    }
   };
 
   return (
@@ -57,11 +113,25 @@ export default function ExtensionsPopup({ onClose, isStandalone }) {
                 )}>
                   {ext.icon || "🧩"}
                 </div>
-                <div className="flex flex-col min-w-0 pr-2">
-                  <span className={clsx(
-                    "text-sm font-medium truncate transition-colors",
-                    ext.isEnabled ? "text-foreground" : "text-foreground/50"
-                  )}>{ext.name}</span>
+                <div className="flex flex-col min-w-0 pr-2 flex-1">
+                  <div className="flex items-center">
+                    <span className={clsx(
+                      "text-sm font-medium truncate transition-colors",
+                      ext.isEnabled ? "text-foreground" : "text-foreground/50"
+                    )}>
+                      {ext.name}
+                    </span>
+                    {ext.id === 'ext-vpn' && ext.isEnabled && (
+                      <span className={clsx("ml-2 text-xs shrink-0", vpnEnabled ? "text-accent" : "text-foreground/50")}>
+                        {vpnEnabled ? "(Connected)" : "(Disconnected)"}
+                      </span>
+                    )}
+                    {ext.id === 'ext-vault' && ext.isEnabled && (
+                      <span className={clsx("ml-2 text-xs shrink-0", vaultUnlocked ? "text-green-500" : "text-foreground/50")}>
+                        {vaultUnlocked ? "(Unlocked)" : "(Locked)"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center space-x-2 shrink-0">

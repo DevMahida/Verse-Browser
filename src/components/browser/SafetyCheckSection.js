@@ -32,7 +32,9 @@ export default function SafetyCheckSection() {
       if (currentUser?.email && window.electron && window.electron.safetyCheck) {
         const res = await window.electron.safetyCheck.checkBreaches(currentUser.email);
         if (res.success && res.count > 0) {
-          breachResult = { status: 'error', detail: `${res.count} data breaches found for your email` };
+          const names = Array.isArray(res.breaches) ? res.breaches.slice(0, 3).join(', ') : 'Unknown';
+          const more = res.count > 3 ? ` (+${res.count - 3} more)` : '';
+          breachResult = { status: 'error', detail: `${res.count} data breach${res.count === 1 ? '' : 'es'} found: ${names}${more}` };
         } else if (!res.success) {
           breachResult = { status: 'warning', detail: 'Could not check breach status' };
         }

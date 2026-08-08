@@ -2,6 +2,7 @@
 
 import HeroSection from "./HeroSection";
 import LiveNews from "./LiveNews";
+import WeatherWidget from "./WeatherWidget";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import CustomizeThemeModal from "../modals/CustomizeThemeModal";
 import { Palette } from "lucide-react";
@@ -12,7 +13,7 @@ export default function Homepage() {
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-gradient-to-b from-background to-surface">
+    <div id="newtab-content-container" className="w-full h-full relative overflow-hidden bg-gradient-to-b from-background to-surface">
       {/* Optional Background Image */}
       {ntpSettings?.backgroundImage && (
         <div 
@@ -33,12 +34,14 @@ export default function Homepage() {
       )}
 
       {/* Content wrapper */}
-      <div className="relative z-10 w-full h-full flex flex-col items-center overflow-y-auto">
+      <div className="relative z-10 w-full h-full flex flex-col items-center overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/10 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
         <div className="w-full flex flex-col items-center min-h-max pb-8">
           <HeroSection />
           <LiveNews />
         </div>
       </div>
+
+      <WeatherWidget />
 
       {/* Customize Button - absolute to viewport bottom-right */}
       <button 

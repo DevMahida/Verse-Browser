@@ -57,7 +57,7 @@ function initiateSystemHandoff(targetUrl) {
 
       server.on('request', (req, res) => {
         try {
-          const parsedUrl = url.parse(req.url, true);
+          const parsedUrl = new URL(req.url, 'http://localhost');
           
           // Ignore favicon requests
           if (parsedUrl.pathname === '/favicon.ico') {
@@ -66,10 +66,11 @@ function initiateSystemHandoff(targetUrl) {
             return;
           }
 
-          console.log(`[SystemAuthHandoff] Received callback:`, parsedUrl.query);
+          const queryParams = Object.fromEntries(parsedUrl.searchParams.entries());
+          console.log(`[SystemAuthHandoff] Received callback:`, queryParams);
 
           // Validate payload with Zod
-          const parseResult = callbackSchema.safeParse(parsedUrl.query);
+          const parseResult = callbackSchema.safeParse(queryParams);
 
           if (!parseResult.success) {
             console.error('[SystemAuthHandoff] Validation Error:', parseResult.error);

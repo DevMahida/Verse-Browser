@@ -14,9 +14,6 @@ export default function HeroSection() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const { suggestions } = useSearchSuggestions(inputValue);
 
-  useEffect(() => {
-    setSelectedIndex(-1);
-  }, [suggestions]);
 
   const handleSearch = (queryOrEvent) => {
     const q = typeof queryOrEvent === 'string' ? queryOrEvent : inputValue;

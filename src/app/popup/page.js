@@ -11,6 +11,8 @@ import VerseShieldPopup from '@/components/toolbar/VerseShieldPopup';
 import ProfileMenu from '@/components/toolbar/ProfileMenu';
 import SiteSettingsPopup from '@/components/toolbar/SiteSettingsPopup';
 import SuggestionsPopup from '@/components/toolbar/SuggestionsPopup';
+import VaultPopup from '@/components/toolbar/VaultPopup';
+import PermissionPrompt from '@/components/toolbar/PermissionPrompt';
 
 function PopupContent() {
   const searchParams = useSearchParams();
@@ -34,6 +36,8 @@ function PopupContent() {
       {type === 'profile' && <ProfileMenu onClose={handleClose} isStandalone />}
       {type === 'sitesettings' && <SiteSettingsPopup url={url} tabId={tabId} onClose={handleClose} isStandalone />}
       {type === 'suggestions' && <SuggestionsPopup />}
+      {type === 'vault' && <VaultPopup onClose={handleClose} isStandalone />}
+      {type === 'permission' && <PermissionPrompt />}
     </div>
   );
 }

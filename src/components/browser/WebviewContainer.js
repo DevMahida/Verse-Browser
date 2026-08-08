@@ -14,7 +14,7 @@ import SettingsPage from "./SettingsPage";
 
 function TabWebview({ tab, isActive, onFocus, styleClass }) {
   const containerRef = useRef(null);
-  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, dropdownOffset, isIncognitoWindow } = useBrowserStore(
+  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, dropdownOffset, isIncognitoWindow, removeTab } = useBrowserStore(
     useShallow((state) => ({
       updateTab: state.updateTab,
       updateFindState: state.updateFindState,
@@ -23,6 +23,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       checkLoginState: state.checkLoginState,
       dropdownOffset: state.dropdownOffset,
       isIncognitoWindow: state.isIncognitoWindow,
+      removeTab: state.removeTab,
     }))
   );
   
@@ -97,10 +98,13 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
         case 'media-paused':
           updateTab(tab.id, { isPlayingAudio: false });
           break;
+        case 'close':
+          removeTab(tab.id);
+          break;
       }
     });
     return cleanup;
-  }, [tab.id, updateTab, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, updateFindState]);
+  }, [tab.id, updateTab, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, updateFindState, removeTab]);
 
   // 3. Bounds & Visibility
   useEffect(() => {

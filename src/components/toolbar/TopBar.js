@@ -255,13 +255,19 @@ export default function TopBar() {
   const tabsContainerRef = useRef(null);
 
   useEffect(() => {
-    if (showProfileMenu || contextMenu || showTabSearchMenu) {
+    if (showProfileMenu) {
       setDropdownOffset(350);
+    } else if (contextMenu) {
+      setDropdownOffset(250);
+    } else if (showTabSearchMenu) {
+      // Calculate dynamic height based on number of tabs (approx 44px per tab + 60px for header/padding, max 350)
+      const dynamicHeight = Math.min(350, (tabs.length * 44) + 60);
+      setDropdownOffset(dynamicHeight);
     } else {
       // Small timeout to avoid race condition with NavigationBar
       setTimeout(() => setDropdownOffset(0), 10);
     }
-  }, [showProfileMenu, contextMenu, showTabSearchMenu, setDropdownOffset]);
+  }, [showProfileMenu, contextMenu, showTabSearchMenu, setDropdownOffset, tabs.length]);
 
   const handleRemoveTab = (id) => {
     if (tabsContainerRef.current) {
