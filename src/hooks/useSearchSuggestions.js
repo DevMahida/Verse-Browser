@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useBrowserStore } from '@/store/useBrowserStore';
 
 export function useSearchSuggestions(query, delay = 250) {
   const [suggestions, setSuggestions] = useState([]);
@@ -7,9 +8,42 @@ export function useSearchSuggestions(query, delay = 250) {
   useEffect(() => {
     const trimmed = query ? query.trim() : '';
 
+    const getHistoryMatches = (searchQuery) => {
+      const history = useBrowserStore.getState().history || [];
+      const isIncognito = useBrowserStore.getState().isIncognitoWindow;
+      
+      // Do not show history in incognito mode
+      if (isIncognito) return [];
+
+      const uniqueUrls = new Set();
+      const matches = [];
+
+      const maxResults = searchQuery ? 2 : 6;
+      const lowerQuery = searchQuery.toLowerCase();
+
+      for (const item of history) {
+        if (!item.url || item.url.startsWith('browser://') || uniqueUrls.has(item.url)) continue;
+
+        if (!searchQuery) {
+          matches.push({ type: 'history', text: item.title || item.url, url: item.url });
+          uniqueUrls.add(item.url);
+        } else {
+          const titleMatch = (item.title || '').toLowerCase().includes(lowerQuery);
+          const urlMatch = item.url.toLowerCase().includes(lowerQuery);
+          if (titleMatch || urlMatch) {
+            matches.push({ type: 'history', text: item.title || item.url, url: item.url });
+            uniqueUrls.add(item.url);
+          }
+        }
+
+        if (matches.length >= maxResults) break;
+      }
+      return matches;
+    };
+
     if (!trimmed || (trimmed.includes('.') && !trimmed.includes(' '))) {
       const timer = setTimeout(() => {
-        setSuggestions([]);
+        setSuggestions(getHistoryMatches(trimmed));
         setIsLoading(false);
       }, 0);
       return () => clearTimeout(timer);
@@ -18,6 +52,7 @@ export function useSearchSuggestions(query, delay = 250) {
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
+        const historyMatches = getHistoryMatches(trimmed);
         const targetUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(trimmed)}`;
         let data = null;
         
@@ -29,13 +64,14 @@ export function useSearchSuggestions(query, delay = 250) {
           if (res.ok) data = await res.json();
         }
 
+        let searchMatches = [];
         if (data && Array.isArray(data) && Array.isArray(data[1])) {
-          setSuggestions(data[1].slice(0, 6));
-        } else {
-          setSuggestions([]);
+          searchMatches = data[1].slice(0, 6).map(text => ({ type: 'search', text, url: null }));
         }
+
+        setSuggestions([...historyMatches, ...searchMatches]);
       } catch (err) {
-        setSuggestions([]);
+        setSuggestions(getHistoryMatches(trimmed));
       } finally {
         setIsLoading(false);
       }

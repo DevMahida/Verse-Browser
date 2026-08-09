@@ -46,8 +46,9 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
   useEffect(() => {
     if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionSelected) {
       const cleanup = window.electron.tabManager.onSuggestionSelected((suggestion) => {
-        setInputValue(suggestion);
-        navigate(activePaneTabId, suggestion);
+        const targetUrl = typeof suggestion === 'string' ? suggestion : (suggestion.url || suggestion.text);
+        setInputValue(targetUrl);
+        navigate(activePaneTabId, targetUrl);
         setIsFocused(false);
       });
       return cleanup;
@@ -101,7 +102,8 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
       e.preventDefault();
       setSelectedIndex(prev => (prev > -1 ? prev - 1 : prev));
     } else if (e.key === 'Enter' && inputValue.trim() !== '') {
-      let targetUrl = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue.trim();
+      let selectedItem = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : null;
+      let targetUrl = selectedItem ? (selectedItem.url || selectedItem.text) : inputValue.trim();
 
       if ((e.ctrlKey || e.metaKey) && !targetUrl.includes('.') && !targetUrl.includes(' ') && !targetUrl.startsWith('verse://')) {
         targetUrl = `www.${targetUrl}.com`;
@@ -121,7 +123,7 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
     <input
       ref={inputRef}
       type="text"
-      value={selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue}
+      value={selectedIndex >= 0 && suggestions[selectedIndex] ? (suggestions[selectedIndex].url || suggestions[selectedIndex].text) : inputValue}
       onChange={(e) => {
         setInputValue(e.target.value);
         setSelectedIndex(-1);

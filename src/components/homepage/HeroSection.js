@@ -16,7 +16,13 @@ export default function HeroSection() {
 
 
   const handleSearch = (queryOrEvent) => {
-    const q = typeof queryOrEvent === 'string' ? queryOrEvent : inputValue;
+    let q = inputValue;
+    if (typeof queryOrEvent === 'string') {
+      q = queryOrEvent;
+    } else if (queryOrEvent && typeof queryOrEvent === 'object' && !queryOrEvent.target) {
+      q = queryOrEvent.url || queryOrEvent.text;
+    }
+    
     if (q.trim() !== '') {
       navigate(activeTabId, q.trim());
       setIsFocused(false);
@@ -40,7 +46,8 @@ export default function HeroSection() {
       e.preventDefault();
       setSelectedIndex(prev => (prev > -1 ? prev - 1 : prev));
     } else if (e.key === 'Enter') {
-      const q = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue;
+      const selectedItem = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : null;
+      const q = selectedItem ? (selectedItem.url || selectedItem.text) : inputValue;
       handleSearch(q);
       setSelectedIndex(-1);
       e.target?.blur?.();
@@ -101,7 +108,7 @@ export default function HeroSection() {
           <Search className="text-foreground/70 mr-3 w-5 h-5" />
           <input
             type="text"
-            value={selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue}
+            value={selectedIndex >= 0 && suggestions[selectedIndex] ? (suggestions[selectedIndex].url || suggestions[selectedIndex].text) : inputValue}
             onChange={(e) => {
               setInputValue(e.target.value);
               setSelectedIndex(-1);
