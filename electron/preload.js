@@ -98,6 +98,11 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.on('suggestions:update', handler);
       return () => ipcRenderer.removeListener('suggestions:update', handler);
     },
+    onWebviewKeydown: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('webview-keydown', handler);
+      return () => ipcRenderer.removeListener('webview-keydown', handler);
+    },
     selectSuggestion: (suggestion) => ipcRenderer.send('suggestions-select', suggestion),
     onSuggestionSelected: (callback) => {
       const handler = (_event, suggestion) => callback(suggestion);
@@ -177,6 +182,13 @@ contextBridge.exposeInMainWorld("electron", {
   cancelDownload: (id) => ipcRenderer.send('cancel-download', id),
   openFile: (path) => ipcRenderer.send('open-file', path),
   showInFolder: (path) => ipcRenderer.send('show-in-folder', path),
+  
+  // Resume a download from URL (across app restarts)
+  resumeDownloadFromUrl: (data) => ipcRenderer.invoke('resume-download-from-url', data),
+  // Retry a failed/cancelled download
+  retryDownload: (data) => ipcRenderer.invoke('retry-download', data),
+  // Remove a download's file from disk
+  removeDownloadFile: (data) => ipcRenderer.invoke('remove-download-file', data),
 
   onDownloadStarted: (callback) => {
     ipcRenderer.on('download-started', (event, item) => callback(item));

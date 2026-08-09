@@ -251,6 +251,22 @@ function initTabManager() {
       view.webContents.setZoomLevel(newLevel);
       forwardEvent('zoom-changed', { level: newLevel });
     });
+
+    view.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown') {
+        const win = view._parentWindow;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('webview-keydown', {
+            key: input.key,
+            code: input.code,
+            ctrlKey: input.control,
+            shiftKey: input.shift,
+            altKey: input.alt,
+            metaKey: input.meta,
+          });
+        }
+      }
+    });
     view.webContents.on('found-in-page', (e, result) => {
       forwardEvent('found-in-page', {
         activeMatchOrdinal: result.activeMatchOrdinal,

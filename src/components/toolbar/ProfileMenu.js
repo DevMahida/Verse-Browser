@@ -4,7 +4,7 @@ import { FcGoogle } from 'react-icons/fc';
 import { useBrowserStore } from '@/store/useBrowserStore';
 import { useShallow } from 'zustand/react/shallow';
 
-export default function ProfileMenu({ onClose }) {
+export default function ProfileMenu({ onClose, isStandalone }) {
   const [profiles, setProfiles] = useState([]);
   const [currentProfileId, setCurrentProfileId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -135,7 +135,7 @@ export default function ProfileMenu({ onClose }) {
 
   if (isIncognitoWindow) {
     return (
-      <div className="absolute top-[calc(100%+8px)] right-0 w-72 bg-popover/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4 z-50 text-foreground">
+      <div className={isStandalone ? "w-full h-fit max-h-screen overflow-y-auto bg-surface/95 backdrop-blur-xl text-foreground flex flex-col p-4" : "absolute top-[calc(100%+8px)] right-0 w-72 bg-surface/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-4 z-50 text-foreground"}>
         <div className="flex flex-col items-center p-4">
           <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
             <User className="h-8 w-8 text-foreground/50" />
@@ -152,7 +152,7 @@ export default function ProfileMenu({ onClose }) {
   const currentProfile = profiles.find(p => p.id === currentProfileId) || { name: 'Default', email: null, avatar: '' };
 
   return (
-    <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-popover/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl overflow-hidden z-50 text-foreground animate-in slide-in-from-top-2 duration-200">
+    <div className={isStandalone ? "w-full h-fit max-h-screen bg-surface/95 backdrop-blur-xl text-foreground flex flex-col overflow-y-auto" : "absolute top-[calc(100%+8px)] right-0 w-80 bg-surface/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl overflow-hidden z-50 text-foreground animate-in slide-in-from-top-2 duration-200"}>
       {/* Signed-in User Header */}
       <div className="p-4 border-b border-border/50 bg-muted/30">
         <div className="flex items-center gap-4">

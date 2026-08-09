@@ -18,7 +18,7 @@ export default function SuggestionsPopup() {
   if (!suggestions || suggestions.length === 0) return null;
 
   return (
-    <div className="w-full bg-transparent">
+    <div className="w-full h-full bg-transparent rounded-xl overflow-hidden">
       <SuggestionsDropdown
         suggestions={suggestions}
         selectedIndex={selectedIndex}

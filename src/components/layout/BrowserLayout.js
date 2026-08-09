@@ -455,8 +455,24 @@ export default function BrowserLayout() {
       }
     };
 
+    const cleanupWebviewKeydown = window.electron?.tabManager?.onWebviewKeydown?.((data) => {
+      handleKeyDown({
+        key: data.key,
+        code: data.code,
+        ctrlKey: data.ctrlKey,
+        shiftKey: data.shiftKey,
+        altKey: data.altKey,
+        metaKey: data.metaKey,
+        preventDefault: () => {}, // mock
+        target: { tagName: 'WEBVIEW' } // mock target
+      });
+    });
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      cleanupWebviewKeydown?.();
+    };
   }, [
     openHistoryTab, 
     openBookmarksTab, 
@@ -475,6 +491,10 @@ export default function BrowserLayout() {
 
   useEffect(() => {
     if (!window.electron) return;
+
+    // On app startup, mark any downloads that were progressing/paused as interrupted
+    // since the Electron DownloadItem references are lost after restart
+    useBrowserStore.getState().markStaleDownloads();
 
     window.electron.onDownloadStarted((item) => {
       useBrowserStore.getState().addDownload(item);

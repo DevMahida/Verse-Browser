@@ -33,11 +33,11 @@ const MenuItem = ({ icon: Icon, label, onClick, hasSubmenu, shortcut, disabled }
 
 const MenuDivider = () => <div className="h-px bg-border my-1.5" />;
 
-export default function BrowserMenu() {
+export default function BrowserMenu({ isStandalone }) {
   const { 
     tabs, activeTabId, splitTabId, focusedPane, 
     addTab, openHistoryTab, openDownloadsTab, openExtensionsTab, openSettingsTab, openBookmarksTab,
-    theme, toggleTheme, setDropdownOffset,
+    theme, toggleTheme,
     bookmarks, toggleBookmark, bookmarkBarVisibility, setBookmarkBarVisibility,
     recentlyClosedTabs, history
   } = useBrowserStore(
@@ -54,7 +54,6 @@ export default function BrowserMenu() {
       openBookmarksTab: state.openBookmarksTab,
       theme: state.theme,
       toggleTheme: state.toggleTheme,
-      setDropdownOffset: state.setDropdownOffset,
       bookmarks: state.bookmarks,
       toggleBookmark: state.toggleBookmark,
       bookmarkBarVisibility: state.bookmarkBarVisibility,
@@ -77,8 +76,10 @@ export default function BrowserMenu() {
   const zoomPercentage = Math.round(Math.pow(1.2, zoomLevel) * 100);
 
   useEffect(() => {
+    if (!isOpen && !isStandalone) return;
+    
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+      if (!isStandalone && menuRef.current && !menuRef.current.contains(e.target)) {
         setIsOpen(false);
         setTimeout(() => setActiveMenu('main'), 200);
       }
@@ -92,48 +93,37 @@ export default function BrowserMenu() {
       document.removeEventListener("mousedown", handleClickOutside);
       clearInterval(interval);
     };
-  }, []);
+  }, [isOpen, isStandalone]);
 
   useEffect(() => {
-    // Native WebContentsView renders at the OS level, above all DOM elements.
-    // We MUST set dropdownOffset to hide the native view and show a screenshot
-    // so that the menu dropdown is visible on top.
-    if (isOpen) {
-      setDropdownOffset(500);
-    } else {
-      setDropdownOffset(0);
+    if (isStandalone && menuRef.current && window.electron?.tabManager?.resizePopup) {
+      setTimeout(() => {
+        if (menuRef.current) {
+          const height = menuRef.current.offsetHeight;
+          const width = window.innerWidth;
+          window.electron.tabManager.resizePopup({ width, height });
+        }
+      }, 0);
     }
-  }, [isOpen, setDropdownOffset]);
+  }, [isStandalone, activeMenu]);
 
   const handleAction = (action, close = true) => {
     window.electron?.tabManager?.action?.({ tabId: activePaneTabId, action });
     
-    // For zoom actions, trigger a screenshot re-capture by briefly toggling the offset.
-    // This makes the updated zoom level visible in the screenshot while the menu stays open.
-    if (!close && (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset')) {
-      // The WebviewContainer's screenshot capture depends on tab.zoomLevel,
-      // which gets updated via the zoom-changed event from the native side.
-      // We give it a brief moment to process, then force a re-capture by
-      // toggling dropdownOffset (the screenshot useEffect depends on it).
-      setTimeout(() => {
-        if (isOpen) {
-          setDropdownOffset(0);
-          setTimeout(() => {
-            if (isOpen) setDropdownOffset(500);
-          }, 100);
-        }
-      }, 150);
-    }
-    
     if (close) {
-      setIsOpen(false);
-      setTimeout(() => setActiveMenu('main'), 200);
+      handleClose();
     }
   };
 
   const handleClose = () => {
-    setIsOpen(false);
-    setTimeout(() => setActiveMenu('main'), 200);
+    if (isStandalone) {
+      if (window.electron?.tabManager?.closePopup) {
+        window.electron.tabManager.closePopup();
+      }
+    } else {
+      setIsOpen(false);
+      setTimeout(() => setActiveMenu('main'), 200);
+    }
   };
 
   const renderMainMenu = () => (
@@ -387,6 +377,16 @@ export default function BrowserMenu() {
       default: return renderMainMenu();
     }
   };
+
+  if (isStandalone) {
+    return (
+      <div className="w-full h-fit bg-surface flex flex-col text-sm text-foreground/90 overflow-hidden rounded-b-xl" ref={menuRef}>
+        <div className="flex-1 overflow-y-auto no-scrollbar py-1.5">
+          {renderContent()}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex" ref={menuRef}>

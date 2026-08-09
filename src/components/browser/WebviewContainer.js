@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useCallback } from "react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
 import Homepage from "../homepage/Homepage";
@@ -12,16 +12,15 @@ import DownloadsPage from "./DownloadsPage";
 import ExtensionsPage from "./ExtensionsPage";
 import SettingsPage from "./SettingsPage";
 
-function TabWebview({ tab, isActive, onFocus, styleClass }) {
+const TabWebview = memo(({ tab, isActive, onFocus, styleClass }) => {
   const containerRef = useRef(null);
-  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, dropdownOffset, isIncognitoWindow, removeTab } = useBrowserStore(
+  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, removeTab } = useBrowserStore(
     useShallow((state) => ({
       updateTab: state.updateTab,
       updateFindState: state.updateFindState,
       addToHistory: state.addToHistory,
       updateHistoryMeta: state.updateHistoryMeta,
       checkLoginState: state.checkLoginState,
-      dropdownOffset: state.dropdownOffset,
       isIncognitoWindow: state.isIncognitoWindow,
       removeTab: state.removeTab,
     }))
@@ -121,9 +120,9 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
         tabId: tab.id,
         bounds: { 
           x: Math.round(rect.x), 
-          y: Math.round(rect.y + (dropdownOffset || 0)), 
+          y: Math.round(rect.y), 
           width: Math.round(rect.width), 
-          height: Math.round(Math.max(0, rect.height - (dropdownOffset || 0)))
+          height: Math.round(Math.max(0, rect.height))
         },
         isActive: isActive // Always keep the active tab attached to prevent Chromium network throttling
       });
@@ -139,7 +138,7 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       clearTimeout(timer);
       resizeObserver.disconnect();
     };
-  }, [tab.id, isActive, styleClass, dropdownOffset]);
+  }, [tab.id, isActive]);
 
   // 4. Remote Navigation
   useEffect(() => {
@@ -208,7 +207,8 @@ function TabWebview({ tab, isActive, onFocus, styleClass }) {
       />
     </div>
   );
-}
+});
+TabWebview.displayName = 'TabWebview';
 
 export default function WebviewContainer() {
   const { tabs, activeTabId, splitTabId, focusedPane, setFocusedPane, isDraggingTab } = useBrowserStore(

@@ -52,6 +52,7 @@ function showPopupWindow({ parentWin, url, width = 360, height = 380, x, y, part
   activePopupWindow.loadURL(finalUrl);
 
   activePopupWindow.once('ready-to-show', () => {
+    activePopupWindow.webContents.insertCSS('body, html { background: transparent !important; overflow: hidden !important; }');
     if (activePopupWindow && !activePopupWindow.isDestroyed()) {
       activePopupWindow.show();
     }
@@ -120,6 +121,7 @@ function initSuggestionsPopup(parentWin, partition, baseUrl) {
   suggestionsPopupWindow.loadURL(finalUrl);
 
   suggestionsPopupWindow.webContents.on('did-finish-load', () => {
+    suggestionsPopupWindow.webContents.insertCSS('body, html { background: transparent !important; overflow: hidden !important; }');
     if (lastSuggestions && lastSuggestions.length > 0) {
       suggestionsPopupWindow.webContents.send('suggestions:update', { suggestions: lastSuggestions, selectedIndex: lastSelectedIndex });
     }

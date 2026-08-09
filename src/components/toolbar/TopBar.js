@@ -1,7 +1,7 @@
 "use client";
 
 import { X, Plus, User, LogOut, LogIn, MoreVertical, Settings, History, Download, Volume2, VolumeX, ChevronDown } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -12,7 +12,7 @@ import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordin
 import { CSS } from '@dnd-kit/utilities';
 
 // Floating mini-window preview shown when tearing off a tab (Chrome-style)
-function TearOffWindowPreview({ tab, mousePos }) {
+const TearOffWindowPreview = memo(function TearOffWindowPreview({ tab, mousePos }) {
   if (!tab || !mousePos) return null;
   return createPortal(
     <div
@@ -61,9 +61,9 @@ function TearOffWindowPreview({ tab, mousePos }) {
     </div>,
     document.body
   );
-}
+});
 
-function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onContextMenu, frozenTabWidth, tabCount, isTearingOff }) {
+const SortableTab = memo(function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onContextMenu, frozenTabWidth, tabCount, isTearingOff }) {
   const {
     attributes,
     listeners,
@@ -126,7 +126,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
     onPointerDown: (e) => {
       // Don't let dnd-kit intercept middle (1) or right (2) clicks
       if (e.button === 1 || e.button === 2) {
-        e.stopPropagation();
+        return;
       } else {
         listeners?.onPointerDown?.(e);
       }
@@ -148,6 +148,9 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
         if (e.button === 1) { // middle click
           e.preventDefault();
           removeTab(tab.id);
+        } else if (e.button === 2) { // right click
+          e.preventDefault();
+          onContextMenu(e, tab.id);
         }
       }}
       className={clsx(
@@ -218,7 +221,7 @@ function SortableTab({ tab, isActive, setActiveTab, removeTab, toggleMute, onCon
       )}
     </div>
   );
-}
+});
 
 export default function TopBar() {
   const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset, isIncognitoWindow } = useBrowserStore(
@@ -239,37 +242,16 @@ export default function TopBar() {
       switchAccount: state.switchAccount,
       toggleMute: state.toggleMute,
       openSettingsTab: state.openSettingsTab,
-      setDropdownOffset: state.setDropdownOffset,
-      isIncognitoWindow: state.isIncognitoWindow,
     }))
   );
-  
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showTabSearchMenu, setShowTabSearchMenu] = useState(false);
-  const [tabSearchQuery, setTabSearchQuery] = useState('');
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [selectedLogoutAccount, setSelectedLogoutAccount] = useState('all');
-  const [contextMenu, setContextMenu] = useState(null);
   const [frozenTabWidth, setFrozenTabWidth] = useState(null);
   const menuRef = useRef(null);
   const tabsContainerRef = useRef(null);
 
-  useEffect(() => {
-    if (showProfileMenu) {
-      setDropdownOffset(350);
-    } else if (contextMenu) {
-      setDropdownOffset(250);
-    } else if (showTabSearchMenu) {
-      // Calculate dynamic height based on number of tabs (approx 44px per tab + 60px for header/padding, max 350)
-      const dynamicHeight = Math.min(350, (tabs.length * 44) + 60);
-      setDropdownOffset(dynamicHeight);
-    } else {
-      // Small timeout to avoid race condition with NavigationBar
-      setTimeout(() => setDropdownOffset(0), 10);
-    }
-  }, [showProfileMenu, contextMenu, showTabSearchMenu, setDropdownOffset, tabs.length]);
-
-  const handleRemoveTab = (id) => {
+  const handleRemoveTab = useCallback((id) => {
     if (tabsContainerRef.current) {
       const tabNodes = tabsContainerRef.current.querySelectorAll('.group');
       for (const node of tabNodes) {
@@ -280,7 +262,38 @@ export default function TopBar() {
       }
     }
     removeTab(id);
-  };
+  }, [removeTab]);
+
+  const handleSetActiveTab = useCallback((id) => {
+    if (id === splitTabId) setFocusedPane('secondary');
+    else if (id === activeTabId) setFocusedPane('primary');
+    else setActiveTab(id);
+  }, [splitTabId, activeTabId, setFocusedPane, setActiveTab]);
+
+  const handleContextMenu = useCallback((e, id) => {
+    e.preventDefault();
+    if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+      const popupWidth = 224; // w-56
+      const popupHeight = 400; // rough height
+      let x = Math.round(window.screenX + e.clientX);
+      let y = Math.round(window.screenY + e.clientY);
+      
+      if (x + popupWidth > window.screenX + window.innerWidth) {
+        x = window.screenX + window.innerWidth - popupWidth;
+      }
+      
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const popupUrl = `${baseUrl}/popup?type=tab-context&tabId=${id}`;
+
+      window.electron.tabManager.openPopup({
+        url: popupUrl,
+        width: popupWidth,
+        height: popupHeight,
+        x,
+        y
+      });
+    }
+  }, []);
 
   const [tearingOffTabId, setTearingOffTabId] = useState(null);
   const [mousePos, setMousePos] = useState(null);
@@ -359,15 +372,6 @@ export default function TopBar() {
     }
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowProfileMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   return (
     <div 
@@ -378,16 +382,6 @@ export default function TopBar() {
         }
       }}
     >
-      {/* Invisible overlay to capture clicks over the webview when menus are open */}
-      {(showProfileMenu || showTabSearchMenu) && (
-        <div 
-          className="fixed inset-0 z-40 no-drag-region"
-          onClick={() => {
-            setShowProfileMenu(false);
-            setShowTabSearchMenu(false);
-          }}
-        />
-      )}
       {/* App Icon / Logo area */}
       <div className="flex items-center px-3 h-8 mb-1 space-x-2 text-foreground no-drag-region">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -399,58 +393,34 @@ export default function TopBar() {
       <div className="relative flex items-center justify-center h-8 no-drag-region ml-1">
         <button 
           aria-label="Search Tabs"
-          onClick={() => setShowTabSearchMenu(!showTabSearchMenu)}
+          onClick={(e) => {
+            if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const popupWidth = 256; // w-64
+              const popupHeight = 350;
+              let x = Math.round(window.screenX + rect.left);
+              let y = Math.round(window.screenY + rect.bottom + 8);
+              
+              if (x + popupWidth > window.screenX + window.innerWidth) {
+                x = window.screenX + window.innerWidth - popupWidth;
+              }
+              
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+              const popupUrl = `${baseUrl}/popup?type=tab-search`;
+
+              window.electron.tabManager.openPopup({
+                url: popupUrl,
+                width: popupWidth,
+                height: popupHeight,
+                x,
+                y
+              });
+            }
+          }}
           className="h-8 w-8 flex items-center justify-center hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px focus-visible:ring-2 focus-visible:outline-none rounded-md cursor-pointer"
         >
           <ChevronDown size={16} />
         </button>
-        {showTabSearchMenu && (
-          <div className="absolute top-10 left-0 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 p-2 flex flex-col">
-            <input
-              type="text"
-              autoFocus
-              value={tabSearchQuery}
-              onChange={(e) => setTabSearchQuery(e.target.value)}
-              placeholder="Search tabs..."
-              className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:border-accent/50 focus:outline-none mb-2"
-            />
-            <div className="max-h-80 overflow-y-auto no-scrollbar flex flex-col space-y-1">
-              {tabs.filter(t => t.title?.toLowerCase().includes(tabSearchQuery.toLowerCase()) || t.url?.toLowerCase().includes(tabSearchQuery.toLowerCase())).map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setActiveTab(t.id);
-                    setShowTabSearchMenu(false);
-                    setTabSearchQuery('');
-                  }}
-                  className="w-full flex items-center gap-2 px-2 py-2 hover:bg-surface-hover rounded-md text-left group cursor-pointer"
-                >
-                  {t.favicon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.favicon} className="w-4 h-4 rounded-sm shrink-0 bg-foreground/10" alt="" />
-                  ) : (
-                    <div className="w-4 h-4 rounded-full bg-foreground/10 shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-foreground font-medium truncate leading-tight">{t.title}</div>
-                    <div className="text-[10px] text-foreground/50 truncate leading-tight">{t.url}</div>
-                  </div>
-                  <X 
-                    size={14} 
-                    className="opacity-0 group-hover:opacity-100 text-foreground/50 hover:text-red-400 transition-opacity shrink-0 cursor-pointer" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeTab(t.id);
-                    }}
-                  />
-                </button>
-              ))}
-              {tabs.filter(t => t.title?.toLowerCase().includes(tabSearchQuery.toLowerCase()) || t.url?.toLowerCase().includes(tabSearchQuery.toLowerCase())).length === 0 && (
-                <div className="text-xs text-foreground/50 text-center py-4">No tabs found</div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Tabs */}
@@ -478,20 +448,13 @@ export default function TopBar() {
                 key={tab.id} 
                 tab={tab} 
                 isActive={tab.id === activeTabId || tab.id === splitTabId} 
-                setActiveTab={(id) => {
-                  if (id === splitTabId) setFocusedPane('secondary');
-                  else if (id === activeTabId) setFocusedPane('primary');
-                  else setActiveTab(id);
-                }}
+                setActiveTab={handleSetActiveTab}
                 removeTab={handleRemoveTab} 
                 toggleMute={toggleMute}
                 frozenTabWidth={frozenTabWidth}
                 tabCount={tabs.length}
                 isTearingOff={tearingOffTabId === tab.id}
-                onContextMenu={(e, id) => {
-                  e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, tabId: id });
-                }}
+                onContextMenu={handleContextMenu}
               />
             ))}
           </SortableContext>
@@ -586,15 +549,6 @@ export default function TopBar() {
             </div>
           </div>
         </div>
-      )}
-
-      {contextMenu && (
-        <TabContextMenu 
-          x={contextMenu.x} 
-          y={contextMenu.y} 
-          tabId={contextMenu.tabId} 
-          onClose={() => setContextMenu(null)} 
-        />
       )}
 
       {/* Chrome-style floating window preview during tab tear-off */}

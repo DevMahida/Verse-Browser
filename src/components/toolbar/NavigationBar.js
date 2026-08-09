@@ -7,8 +7,6 @@ import { FcGoogle } from "react-icons/fc";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
 import clsx from "clsx";
-import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
-import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
 import SiteSettingsPopup from "./SiteSettingsPopup";
 import VerseShieldPopup from "./VerseShieldPopup";
 import HistoryPopup from "./HistoryPopup";
@@ -18,6 +16,9 @@ import BrowserMenu from "./BrowserMenu";
 import ProfileMenu from "./ProfileMenu";
 import ZoomPopup from "./ZoomPopup";
 import VpnLocationModal from "./VpnLocationModal";
+import AddressInput from "./AddressInput";
+import DownloadIndicator from "./DownloadIndicator";
+import ShieldButton from "./ShieldButton";
 
 export default function NavigationBar() {
   const { toggleAISidebar, isAISidebarOpen, tabs, activeTabId, splitTabId, focusedPane, clearSplitView, navigate, openHistoryTab, bookmarks, toggleBookmark, openDownloadsTab, openExtensionsTab, openSettingsTab, theme, toggleTheme, addTab, setDropdownOffset, isIncognitoWindow, userProfilePic, currentUser, downloads, showHomeButton, installedExtensions, toggleExtension, activePermissionRequests, vpnEnabled, setVpnEnabled, vaultUnlocked, setVaultUnlocked, showVpnModal, setShowVpnModal } = useBrowserStore(
@@ -65,21 +66,13 @@ export default function NavigationBar() {
   const activeTab = tabs.find(t => t.id === activePaneTabId);
   const zoomLevel = activeTab?.zoomLevel || 0;
   const zoomPercentage = Math.round(Math.pow(1.2, zoomLevel) * 100);
-  const [inputValue, setInputValue] = useState("");
-  const [isFocused, setIsFocused] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
-  const [showShieldPopup, setShowShieldPopup] = useState(false);
-  const [shieldBlockedCount, setShieldBlockedCount] = useState(0);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
-  const [showDownloadsPopup, setShowDownloadsPopup] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showZoomPopup, setShowZoomPopup] = useState(false);
   const [showExtensionsPopup, setShowExtensionsPopup] = useState(false);
-  const [downloadAnimate, setDownloadAnimate] = useState(false);
   const [copiedColor, setCopiedColor] = useState(null);
   const [pipMessage, setPipMessage] = useState(null);
-  const [downloadJustFinished, setDownloadJustFinished] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [currentProfileId, setCurrentProfileId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -88,69 +81,11 @@ export default function NavigationBar() {
     }
     return 'main';
   });
-  const prevCompletedCount = useRef(0);
-  const { suggestions } = useSearchSuggestions(inputValue);
-  
-  const [prevSuggestions, setPrevSuggestions] = useState(suggestions);
-  if (suggestions !== prevSuggestions) {
-    setPrevSuggestions(suggestions);
-    setSelectedIndex(-1);
-  }
-  
-  useEffect(() => {
-    if (window.electron && window.electron.tabManager && window.electron.tabManager.showSuggestionsPopup) {
-      if (isFocused && suggestions.length > 0) {
-        // Calculate exact height: 45px per item + 16px padding (py-2) + 2px borders
-        const height = suggestions.length * 45 + 18;
-        
-        // Ensure inputRef is mounted
-        if (inputRef.current) {
-          const rect = inputRef.current.getBoundingClientRect();
-          window.electron.tabManager.showSuggestionsPopup({
-            x: Math.round(window.screenX + rect.left),
-            y: Math.round(window.screenY + rect.bottom + 8),
-            width: Math.round(rect.width),
-            height: Math.round(height)
-          });
-        }
-        
-        window.electron.tabManager.updateSuggestions({
-          suggestions,
-          selectedIndex
-        });
-      } else {
-        window.electron.tabManager.hideSuggestionsPopup();
-      }
-    }
-  }, [isFocused, suggestions, selectedIndex]);
 
-  useEffect(() => {
-    if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionSelected) {
-      const cleanup = window.electron.tabManager.onSuggestionSelected((suggestion) => {
-        setInputValue(suggestion);
-        navigate(activeTabId, suggestion);
-        setIsFocused(false);
-      });
-      return cleanup;
-    }
-  }, [navigate, activeTabId]);
-  
-  useEffect(() => {
-    if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionsBlur) {
-      const cleanup = window.electron.tabManager.onSuggestionsBlur(() => {
-        setIsFocused(false);
-      });
-      return cleanup;
-    }
-  }, []);
-  
   const overflowMenuRef = useRef(null);
-  const inputRef = useRef(null);
   const historyRef = useRef(null);
-  const downloadsRef = useRef(null);
   const profileRef = useRef(null);
   const zoomRef = useRef(null);
-  const shieldRef = useRef(null);
   const extensionsRef = useRef(null);
 
   useEffect(() => {
@@ -170,17 +105,11 @@ export default function NavigationBar() {
       if (historyRef.current && !historyRef.current.contains(e.target)) {
         setShowHistoryPopup(false);
       }
-      if (downloadsRef.current && !downloadsRef.current.contains(e.target)) {
-        setShowDownloadsPopup(false);
-      }
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setShowProfileMenu(false);
       }
       if (zoomRef.current && !zoomRef.current.contains(e.target)) {
         setShowZoomPopup(false);
-      }
-      if (shieldRef.current && !shieldRef.current.contains(e.target)) {
-        setShowShieldPopup(false);
       }
       if (extensionsRef.current && !extensionsRef.current.contains(e.target)) {
         setShowExtensionsPopup(false);
@@ -193,45 +122,13 @@ export default function NavigationBar() {
   useEffect(() => {
     let offset = 0;
     if (showHistoryPopup) offset = 420;
-    else if (showDownloadsPopup) offset = 420;
     else if (showSiteSettings) offset = 250;
-    else if (showShieldPopup) offset = 380;
     else if (showProfileMenu) offset = 500;
     else if (showZoomPopup) offset = 200;
     else if (showExtensionsPopup) offset = 300;
 
     setDropdownOffset(offset);
-  }, [showHistoryPopup, showDownloadsPopup, showSiteSettings, showShieldPopup, showProfileMenu, showZoomPopup, showExtensionsPopup, setDropdownOffset]);
-
-  useEffect(() => {
-    if (!downloads) return;
-
-    const completedCount = downloads.filter(d => d.state === 'completed').length;
-    if (completedCount > prevCompletedCount.current) {
-      // A new download finished
-      setDownloadAnimate(true);
-      setShowDownloadsPopup(true);
-      setDownloadJustFinished(true);
-
-      const hideTimer = setTimeout(() => {
-        setShowDownloadsPopup(false);
-        setDownloadJustFinished(false);
-      }, 3000);
-
-      const animTimer = setTimeout(() => setDownloadAnimate(false), 300);
-
-      prevCompletedCount.current = completedCount;
-      return () => {
-        clearTimeout(hideTimer);
-        clearTimeout(animTimer);
-      };
-    }
-
-    prevCompletedCount.current = completedCount;
-  }, [downloads]);
-
-  const hasActiveDownloads = (downloads || []).some(d => d.state === 'progressing');
-  const showDownloadBtn = hasActiveDownloads || downloadJustFinished || showDownloadsPopup;
+  }, [showHistoryPopup, showSiteSettings, showProfileMenu, showZoomPopup, showExtensionsPopup, setDropdownOffset]);
 
   const isColorPickerEnabled = installedExtensions?.some(e => e.id === 'ext-color-picker' && e.isEnabled);
 
@@ -288,17 +185,6 @@ export default function NavigationBar() {
   };
 
 
-  // --- Verse Shield: listen for live blocked-count updates ---
-  useEffect(() => {
-    if (!window.electron?.tabManager?.onAdBlockerStatUpdate) return;
-    const cleanup = window.electron.tabManager.onAdBlockerStatUpdate((data) => {
-      // Only update badge if it's for the currently active tab
-      if (data.tabId === activePaneTabId && data.tab) {
-        setShieldBlockedCount(data.tab.ads || 0);
-      }
-    });
-    return cleanup;
-  }, [activePaneTabId]);
 
   // --- Listen to Popup Window Broadcasts ---
   useEffect(() => {
@@ -331,49 +217,7 @@ export default function NavigationBar() {
     return () => bc.close();
   }, [setShowVpnModal, setVaultUnlocked]);
 
-  // Reset shield badge count when switching tabs
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShieldBlockedCount(0);
-      setShowShieldPopup(false);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [activePaneTabId]);
 
-
-  useEffect(() => {
-    if (activeTab) {
-      const isNewTab = activeTab.url === 'browser://newtab';
-      // Visually display verse:// instead of browser://
-      const displayUrl = activeTab.url.replace('browser://', 'verse://');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setInputValue(isNewTab ? '' : displayUrl);
-
-      if (isNewTab && inputRef.current) {
-        // Use a small timeout to ensure the tab switch and render are complete
-        setTimeout(() => {
-          inputRef.current?.focus();
-          inputRef.current?.select();
-        }, 10);
-      }
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    const handleFocusAddressBar = (e) => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        if (e.detail?.search) {
-          setInputValue('? ');
-          // Don't select, let the user type after "? "
-        } else {
-          inputRef.current.select();
-        }
-      }
-    };
-    window.addEventListener('focus-address-bar', handleFocusAddressBar);
-    return () => window.removeEventListener('focus-address-bar', handleFocusAddressBar);
-  }, []);
 
   const isBookmarked = activeTab && bookmarks.some(b => b.url === activeTab.url);
   const { readingList, addToReadingList, removeFromReadingList } = useBrowserStore();
@@ -382,31 +226,6 @@ export default function NavigationBar() {
   const { openReaderMode } = useBrowserStore();
   const canReadMode = activeTab && activeTab.url.startsWith('http') && !activeTab.url.startsWith('browser://reader');
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedIndex(prev => (prev > -1 ? prev - 1 : prev));
-    } else if (e.key === 'Enter' && inputValue.trim() !== '') {
-      let targetUrl = selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue.trim();
-
-      // Ctrl+Enter autocomplete (add www. and .com)
-      if ((e.ctrlKey || e.metaKey) && !targetUrl.includes('.') && !targetUrl.includes(' ') && !targetUrl.startsWith('verse://')) {
-        targetUrl = `www.${targetUrl}.com`;
-      }
-
-      // Convert verse:// back to browser:// for internal routing
-      if (targetUrl.startsWith('verse://')) {
-        targetUrl = targetUrl.replace('verse://', 'browser://');
-      }
-      navigate(activePaneTabId, targetUrl);
-      setIsFocused(false);
-      setSelectedIndex(-1);
-      e.target?.blur?.();
-    }
-  };
 
   const handleBack = () => {
     if (activeTab?.historyIndex > 0) {
@@ -450,8 +269,11 @@ export default function NavigationBar() {
   const canGoForward = activeTab?.history && activeTab.historyIndex < activeTab.history.length - 1;
 
   const activeDownload = (downloads || []).find(d => d.state === 'progressing');
-  const downloadProgress = activeDownload && activeDownload.totalBytes > 0
-    ? (activeDownload.receivedBytes / activeDownload.totalBytes) * 100
+  const pausedDownload = !activeDownload ? (downloads || []).find(d => d.state === 'paused') : null;
+  const interruptedDownload = !activeDownload && !pausedDownload ? (downloads || []).find(d => d.state === 'interrupted') : null;
+  const indicatorDownload = activeDownload || pausedDownload;
+  const downloadProgress = indicatorDownload && indicatorDownload.totalBytes > 0
+    ? (indicatorDownload.receivedBytes / indicatorDownload.totalBytes) * 100
     : 0;
 
   return (
@@ -507,40 +329,37 @@ export default function NavigationBar() {
             <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
           ) }
 
-          <input
-            ref={inputRef}
-            type="text"
-            value={selectedIndex >= 0 && suggestions[selectedIndex] ? suggestions[selectedIndex] : inputValue}
-            onChange={(e) => {
-              setInputValue(e.target.value);
-              setSelectedIndex(-1);
-            }}
-            aria-label="Address and search bar"
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            className="flex-1 bg-transparent border-none outline-none text-[14px] text-foreground placeholder-foreground/50 h-full w-full min-w-0"
-            placeholder="Ask Google or type a URL"
-          />
+          <AddressInput activePaneTabId={activePaneTabId} activeTab={activeTab} />
           {zoomPercentage !== 100 && (
             <div className="relative flex items-center ml-1" ref={zoomRef}>
               <button
-                onClick={() => setShowZoomPopup(!showZoomPopup)}
+                onClick={(e) => {
+                  if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const popupWidth = 224; // w-56
+                    const popupHeight = 100;
+                    const x = Math.round(window.screenX + rect.right - popupWidth);
+                    const y = Math.round(window.screenY + rect.bottom + 8);
+                    
+                    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                    const popupUrl = `${baseUrl}/popup?type=zoom`;
+
+                    window.electron.tabManager.openPopup({
+                      url: popupUrl,
+                      width: popupWidth,
+                      height: popupHeight,
+                      x,
+                      y
+                    });
+                  }
+                }}
                 className="p-1 rounded-md transition-colors text-foreground/70 hover:bg-foreground/10 hover:text-foreground"
                 title="Zoom: this page is zoomed"
                 aria-label="Zoom controls"
                 aria-haspopup="dialog"
-                aria-expanded={showZoomPopup}
               >
                 <ZoomIn size={16} />
               </button>
-              {showZoomPopup && (
-                <ZoomPopup
-                  onClose={() => setShowZoomPopup(false)}
-                  zoomPercentage={zoomPercentage}
-                  activePaneTabId={activePaneTabId}
-                />
-              )}
             </div>
           )}
 
@@ -580,8 +399,8 @@ export default function NavigationBar() {
             <Bookmark size={16} className={isReadingListSaved ? "fill-current" : ""} />
           </button>
 
-          <div className="relative flex items-center" ref={shieldRef}>
-
+          <div className="relative flex items-center">
+            
             {canReadMode && (
               <button
                 onClick={async () => {
@@ -606,49 +425,8 @@ export default function NavigationBar() {
 
             {(activeTab?.url === 'browser://newtab' || activeTab?.url === '') ? (
               <div></div>
-              // <FcGoogle size={18} className="mr-2 opacity-80 grayscale-20 hover:grayscale-0 transition-all" />
             ) : (
-              <>
-                <span className="text-gray-500 me-1">|</span>
-                <button
-                  onClick={(e) => {
-                    if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const popupWidth = 360;
-                      const popupHeight = 460;
-                      const x = Math.round(window.screenX + rect.right - popupWidth);
-                      const y = Math.round(window.screenY + rect.bottom + 8);
-                      
-                      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-                      const urlParam = activeTab?.url ? `&url=${encodeURIComponent(activeTab.url)}` : '';
-                      const popupUrl = `${baseUrl}/popup?type=shield&tabId=${activePaneTabId}${urlParam}`;
-
-                      window.electron.tabManager.openPopup({
-                        url: popupUrl,
-                        width: popupWidth,
-                        height: popupHeight,
-                        x,
-                        y
-                      });
-                    }
-                  }}
-                  className={clsx(
-                    "relative mr-2 transition-colors p-1 rounded-full hover:bg-foreground/10",
-                    showShieldPopup ? "text-emerald-400" : "text-foreground/50 hover:text-foreground"
-                  )}
-                  title="Verse Shield — Ad & Tracker Blocker"
-                  aria-label="Verse Shield"
-                  aria-haspopup="dialog"
-                  aria-expanded={showShieldPopup}
-                >
-                  <Image src="/favicon.png" alt="Verse Shield" width={20} height={20} className="w-5 h-5" />
-                  {shieldBlockedCount > 0 && !showShieldPopup && (
-                    <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 bg-orange-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none shadow-sm">
-                      {shieldBlockedCount > 99 ? '99+' : shieldBlockedCount}
-                    </span>
-                  )}
-                </button>
-              </>
+              <ShieldButton activePaneTabId={activePaneTabId} activeTab={activeTab} />
             )}
           </div>
         </div>
@@ -656,38 +434,7 @@ export default function NavigationBar() {
 
       {/* Extensions & Tools */}
       <div className="flex items-center space-x-0.5 text-foreground/70" ref={overflowMenuRef}>
-        {showDownloadBtn && (
-          <div className="relative hidden lg:flex" ref={downloadsRef}>
-            <button
-              onClick={() => setShowDownloadsPopup(!showDownloadsPopup)}
-              aria-label="Downloads"
-              aria-haspopup="dialog"
-              aria-expanded={showDownloadsPopup}
-              className={clsx(
-                "relative p-2 rounded-full hover:bg-foreground/10 hover:text-foreground transition-colors min-w-10 min-h-10 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none",
-                downloadAnimate && "animate-in zoom-in-90 duration-200"
-              )}
-              title="Downloads"
-            >
-              {activeDownload && (
-                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 44 44">
-                  <circle cx="22" cy="22" r="16" fill="none" className="stroke-foreground/10" strokeWidth="2.5" />
-                  <circle
-                    cx="22" cy="22" r="16"
-                    fill="none"
-                    className="stroke-accent transition-all duration-300 ease-out"
-                    strokeWidth="2.5"
-                    strokeDasharray={100.5}
-                    strokeDashoffset={100.5 - (downloadProgress / 100) * 100.5}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              )}
-              <Download size={18} className={activeDownload ? "text-accent" : ""} />
-            </button>
-            {showDownloadsPopup && <DownloadsPopup onClose={() => setShowDownloadsPopup(false)} />}
-          </div>
-        )}
+        <DownloadIndicator />
         
         {/* Render pinned extensions (only enabled + pinned) */}
         {installedExtensions?.filter(e => e.isPinned && e.isEnabled).map(ext => {
@@ -808,8 +555,6 @@ export default function NavigationBar() {
                   x,
                   y
                 });
-              } else {
-                setShowExtensionsPopup(!showExtensionsPopup);
               }
             }}
             aria-label="Extensions"
@@ -823,29 +568,64 @@ export default function NavigationBar() {
           >
             <Puzzle size={18} />
           </button>
-          {showExtensionsPopup && <ExtensionsPopup onClose={() => setShowExtensionsPopup(false)} />}
         </div>
 
         {/* User Account / Incognito */}
         <div className="relative flex items-center pl-1" ref={profileRef}>
           {isIncognitoWindow ? (
             <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              onClick={(e) => {
+                if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const popupWidth = 320;
+                  const popupHeight = 450;
+                  const x = Math.round(window.screenX + rect.right - popupWidth);
+                  const y = Math.round(window.screenY + rect.bottom + 8);
+                  
+                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                  const popupUrl = `${baseUrl}/popup?type=profile&profileId=${currentProfileId}`;
+
+                  window.electron.tabManager.openPopup({
+                    url: popupUrl,
+                    width: popupWidth,
+                    height: popupHeight,
+                    x,
+                    y
+                  });
+                }
+              }}
               className="flex items-center justify-center space-x-1 px-3 py-1 mr-1 rounded-full bg-surface-hover border border-border text-foreground/70"
               aria-label="Incognito mode"
-              aria-haspopup="menu"
-              aria-expanded={showProfileMenu}
+              aria-haspopup="dialog"
             >
               <EyeOff size={16} />
               <span className="text-xs font-medium">Incognito</span>
             </button>
           ) : (
             <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              onClick={(e) => {
+                if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const popupWidth = 320;
+                  const popupHeight = 450;
+                  const x = Math.round(window.screenX + rect.right - popupWidth);
+                  const y = Math.round(window.screenY + rect.bottom + 8);
+                  
+                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                  const popupUrl = `${baseUrl}/popup?type=profile&profileId=${currentProfileId}`;
+
+                  window.electron.tabManager.openPopup({
+                    url: popupUrl,
+                    width: popupWidth,
+                    height: popupHeight,
+                    x,
+                    y
+                  });
+                }
+              }}
               className="p-1 rounded-full hover:bg-foreground/10 transition-colors w-8 h-8 flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Profile menu"
-              aria-haspopup="menu"
-              aria-expanded={showProfileMenu}
+              aria-haspopup="dialog"
             >
               {userProfilePic ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -864,7 +644,6 @@ export default function NavigationBar() {
               )}
             </button>
           )}
-          {showProfileMenu && <ProfileMenu onClose={() => setShowProfileMenu(false)} />}
         </div>
 
         {/* Divider */}
@@ -891,7 +670,33 @@ export default function NavigationBar() {
 
 
         {/* Browser Menu Button */}
-        <BrowserMenu />
+        <button 
+          onClick={(e) => {
+            if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const popupWidth = 350;
+              const popupHeight = 600;
+              const x = Math.round(window.screenX + rect.right - popupWidth);
+              const y = Math.round(window.screenY + rect.bottom + 8);
+              
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+              const popupUrl = `${baseUrl}/popup?type=browser-menu`;
+
+              window.electron.tabManager.openPopup({
+                url: popupUrl,
+                width: popupWidth,
+                height: popupHeight,
+                x,
+                y
+              });
+            }
+          }}
+          aria-label="Browser Menu"
+          aria-haspopup="dialog"
+          className="p-2 rounded-lg transition-colors min-w-11 min-h-11 flex items-center justify-center focus-visible:ring-2 focus-visible:outline-none hover:bg-foreground/10 hover:text-foreground"
+        >
+          <MoreVertical size={18} />
+        </button>
       </div>
     </div>
     {showVpnModal && <VpnLocationModal />}

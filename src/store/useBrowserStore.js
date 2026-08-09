@@ -1119,6 +1119,51 @@ export const useBrowserStore = create(
       downloads: (state.downloads || []).map(d => d.id === id ? { ...d, ...data } : d),
     }));
   },
+  removeDownload: (id) => set((state) => ({
+    downloads: (state.downloads || []).filter(d => d.id !== id),
+  })),
+  retryDownload: async (id) => {
+    const state = useBrowserStore.getState();
+    const download = (state.downloads || []).find(d => d.id === id);
+    if (download && download.url) {
+      // Remove the old entry
+      set((s) => ({
+        downloads: (s.downloads || []).filter(d => d.id !== id),
+      }));
+      // Ask electron to re-download
+      window.electron?.retryDownload({ url: download.url });
+    }
+  },
+  resumeInterruptedDownload: async (id) => {
+    const state = useBrowserStore.getState();
+    const download = (state.downloads || []).find(d => d.id === id);
+    if (download && download.url) {
+      // Remove the old entry — a new one will be created by the will-download handler
+      set((s) => ({
+        downloads: (s.downloads || []).filter(d => d.id !== id),
+      }));
+      // Use createInterruptedDownload to resume from where we left off
+      window.electron?.resumeDownloadFromUrl({
+        id: download.id,
+        url: download.url,
+        savePath: download.savePath || download.path || '',
+        offset: download.receivedBytes || 0,
+        urlChain: download.urlChain || [download.url],
+        etag: download.etag || '',
+        lastModified: download.lastModified || '',
+      });
+    }
+  },
+  // On app startup, mark any downloads that were 'progressing' or 'paused' as 'interrupted'
+  // since the Electron DownloadItem objects are lost when the app restarts
+  markStaleDownloads: () => set((state) => ({
+    downloads: (state.downloads || []).map(d => {
+      if (d.state === 'progressing' || d.state === 'paused') {
+        return { ...d, state: 'interrupted' };
+      }
+      return d;
+    }),
+  })),
   updateDownloadSettings: (settings) => set((state) => {
     const newSettings = { ...state.downloadSettings, ...settings };
     window.electron?.updateDownloadSettings(newSettings);
@@ -1129,6 +1174,7 @@ export const useBrowserStore = create(
       downloads: (state.downloads || []).filter(d => d.state === 'progressing' || d.state === 'paused'),
     };
   }),
+  clearAllDownloads: () => set({ downloads: [] }),
 
   // Extension Actions
   toggleExtension: (id) => set((state) => {
@@ -1242,6 +1288,8 @@ export const useBrowserStore = create(
         activeTabId: state.activeTabId,
         splitTabId: state.splitTabId,
         focusedPane: state.focusedPane,
+        tabs: state.tabs,
+        recentlyClosedTabs: state.recentlyClosedTabs,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }

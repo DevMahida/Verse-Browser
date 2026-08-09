@@ -936,6 +936,74 @@ app.whenReady().then(async () => {
     if (activeDownloads.has(id)) activeDownloads.get(id).cancel();
   });
 
+  // Resume a download that was interrupted/paused across app restarts
+  // Uses Electron's session.createInterruptedDownload() to re-create the DownloadItem
+  ipcMain.handle('resume-download-from-url', async (event, { id, url, savePath, offset, urlChain, etag, lastModified }) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const profileId = win ? win._profileId : 'main';
+      const partitionStr = profileManager.partitionFor(profileId);
+      const sess = session.fromPartition(partitionStr);
+      
+      sess.createInterruptedDownload({
+        path: savePath,
+        urlChain: urlChain || [url],
+        offset: offset || 0,
+        length: -1, // unknown
+        lastModified: lastModified || '',
+        eTag: etag || '',
+      });
+      
+      return { success: true };
+    } catch (e) {
+      console.error('[Downloads] Failed to resume download from URL:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // Retry a completely failed/cancelled download by re-navigating to the URL
+  ipcMain.handle('retry-download', async (event, { url }) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const profileId = win ? win._profileId : 'main';
+      const partitionStr = profileManager.partitionFor(profileId);
+      const sess = session.fromPartition(partitionStr);
+      
+      // Trigger a new download by loading the URL in a hidden window
+      const hidden = new BrowserWindow({
+        show: false,
+        webPreferences: {
+          partition: partitionStr,
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      hidden.webContents.downloadURL(url);
+      // The will-download handler will pick it up
+      setTimeout(() => {
+        if (!hidden.isDestroyed()) hidden.destroy();
+      }, 5000);
+      
+      return { success: true };
+    } catch (e) {
+      console.error('[Downloads] Failed to retry download:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // Remove a download's partial file from disk
+  ipcMain.handle('remove-download-file', async (event, { filePath }) => {
+    try {
+      if (filePath && fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      return { success: true };
+    } catch (e) {
+      console.error('[Downloads] Failed to remove file:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
   ipcMain.on('open-file', (event, filePath) => {
     const { shell } = require('electron');
     shell.openPath(filePath);
@@ -946,69 +1014,150 @@ app.whenReady().then(async () => {
     shell.showItemInFolder(filePath);
   });
 
-  const sess = session.fromPartition('persist:main');
-  sess.on('will-download', (event, item, webContents) => {
-    const downloadId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    const fileName = item.getFilename();
-    const totalBytes = item.getTotalBytes();
-    
-    console.log(`[will-download] item.getURL()=${item.getURL()} webContents.getURL()=${webContents.getURL()}`);
-    const itemUrlStr = item.getURL().split('#')[0].replace(/\/$/, '');
-    const webUrlStr = webContents.getURL().split('#')[0].replace(/\/$/, '');
-    const isWebpage = itemUrlStr === webUrlStr || item.getMimeType() === 'text/html';
-    
-    if (!downloadSettings.askEveryTime) {
-      const savePath = path.join(downloadSettings.defaultPath, fileName);
-      item.setSavePath(savePath);
-    } else if (isWebpage) {
-      // User is saving the actual webpage, suggest the page title instead of 'download'
-      let title = webContents.getTitle() || 'Webpage';
-      // Sanitize title for filename
-      title = title.replace(/[<>:"/\\|?*]+/g, '_');
-      const suggestedPath = path.join(downloadSettings.defaultPath, title + '.html');
-      console.log(`[will-download] Setting saveDialogOptions to ${suggestedPath}`);
-      item.setSaveDialogOptions({
-        defaultPath: suggestedPath
-      });
-    }
+  // Speed tracking state
+  const downloadSpeedTrackers = new Map(); // downloadId -> { lastBytes, lastTime }
 
-    activeDownloads.set(downloadId, item);
-
-    // Route download progress IPC to the main UI window instead of the webview
-    const hostWebContents = BrowserWindow.getAllWindows()[0]?.webContents || webContents;
-
-    hostWebContents.send('download-started', {
-      id: downloadId,
-      fileName,
-      totalBytes,
-      url: item.getURL(),
-      state: 'progressing',
-      receivedBytes: 0,
-      startTime: Date.now()
-    });
-
-    item.on('updated', (event, state) => {
-      let currentState = state;
-      if (state === 'interrupted') {
-        hostWebContents.send('download-progress', { id: downloadId, state: 'interrupted' });
-      } else if (state === 'progressing') {
-        if (item.isPaused()) {
-          currentState = 'paused';
-          hostWebContents.send('download-progress', { id: downloadId, state: 'paused' });
-        } else {
-          hostWebContents.send('download-progress', {
-            id: downloadId,
-            state: 'progressing',
-            receivedBytes: item.getReceivedBytes()
-          });
+  // Helper: set up will-download on a session
+  const setupDownloadHandler = (sess) => {
+    sess.on('will-download', (event, item, webContents) => {
+      const downloadId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+      const fileName = item.getFilename();
+      const totalBytes = item.getTotalBytes();
+      
+      const itemUrlStr = item.getURL().split('#')[0].replace(/\/$/, '');
+      const webUrlStr = webContents ? webContents.getURL().split('#')[0].replace(/\/$/, '') : '';
+      
+      console.log(`[will-download] item.getURL()=${item.getURL()} webContents=${!!webContents}`);
+      
+      const isWebpage = itemUrlStr === webUrlStr || item.getMimeType() === 'text/html';
+      
+      if (!downloadSettings.askEveryTime) {
+        // Only set save path if we aren't resuming a download that already has one
+        if (!item.getSavePath()) {
+          const savePath = path.join(downloadSettings.defaultPath, fileName);
+          item.setSavePath(savePath);
         }
+      } else if (isWebpage && webContents) {
+        // User is saving the actual webpage, suggest the page title instead of 'download'
+        let title = webContents.getTitle() || 'Webpage';
+        // Sanitize title for filename
+        title = title.replace(/[<>:"/\\|?*]+/g, '_');
+        const suggestedPath = path.join(downloadSettings.defaultPath, title + '.html');
+        console.log(`[will-download] Setting saveDialogOptions to ${suggestedPath}`);
+        item.setSaveDialogOptions({
+          defaultPath: suggestedPath
+        });
       }
-    });
 
-    item.once('done', (event, state) => {
-      activeDownloads.delete(downloadId);
-      hostWebContents.send('download-done', { id: downloadId, state, path: item.getSavePath() });
+      // If this is a resumed interrupted download, it starts out in an 'interrupted' state. We must resume it.
+      if (item.getState() === 'interrupted') {
+        item.resume();
+      }
+
+      activeDownloads.set(downloadId, item);
+      downloadSpeedTrackers.set(downloadId, { lastBytes: 0, lastTime: Date.now() });
+
+      // Route download progress IPC to all main UI windows (not popup windows).
+      const getMainWindows = () => {
+        return [...allWindows].filter(w => !w.isDestroyed());
+      };
+
+      const broadcastDownload = (channel, data) => {
+        for (const win of getMainWindows()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send(channel, data);
+          }
+        }
+      };
+
+      // Capture resume metadata
+      const urlChain = item.getURLChain ? item.getURLChain() : [item.getURL()];
+      const etag = item.getETag ? item.getETag() : '';
+      const lastModified = item.getLastModifiedTime ? item.getLastModifiedTime() : '';
+
+      broadcastDownload('download-started', {
+        id: downloadId,
+        fileName,
+        totalBytes,
+        url: item.getURL(),
+        state: 'progressing',
+        receivedBytes: 0,
+        startTime: Date.now(),
+        savePath: item.getSavePath() || '',
+        urlChain,
+        etag,
+        lastModified,
+        speed: 0,
+      });
+
+      item.on('updated', (event, state) => {
+        // Calculate speed
+        const tracker = downloadSpeedTrackers.get(downloadId);
+        const now = Date.now();
+        const currentBytes = item.getReceivedBytes();
+        let speed = 0;
+        
+        if (tracker) {
+          const timeDiff = (now - tracker.lastTime) / 1000; // seconds
+          if (timeDiff > 0.3) { // Update speed every 300ms minimum
+            speed = Math.round((currentBytes - tracker.lastBytes) / timeDiff);
+            downloadSpeedTrackers.set(downloadId, { lastBytes: currentBytes, lastTime: now });
+          } else {
+            speed = tracker.speed || 0;
+          }
+          // Store computed speed for next iteration
+          const t = downloadSpeedTrackers.get(downloadId);
+          if (t) t.speed = speed;
+        }
+
+        if (state === 'interrupted') {
+          broadcastDownload('download-progress', { id: downloadId, state: 'interrupted' });
+        } else if (state === 'progressing') {
+          // Update savePath in case it was set by dialog
+          const currentSavePath = item.getSavePath() || '';
+          if (item.isPaused()) {
+            broadcastDownload('download-progress', { 
+              id: downloadId, 
+              state: 'paused',
+              receivedBytes: currentBytes,
+              savePath: currentSavePath,
+              urlChain: item.getURLChain ? item.getURLChain() : [item.getURL()],
+              etag: item.getETag ? item.getETag() : '',
+              lastModified: item.getLastModifiedTime ? item.getLastModifiedTime() : '',
+            });
+          } else {
+            broadcastDownload('download-progress', {
+              id: downloadId,
+              state: 'progressing',
+              receivedBytes: currentBytes,
+              speed,
+              savePath: currentSavePath,
+            });
+          }
+        }
+      });
+
+      item.once('done', (event, state) => {
+        activeDownloads.delete(downloadId);
+        downloadSpeedTrackers.delete(downloadId);
+        broadcastDownload('download-done', { 
+          id: downloadId, 
+          state, 
+          path: item.getSavePath(),
+          savePath: item.getSavePath(),
+          receivedBytes: item.getReceivedBytes(),
+          totalBytes: item.getTotalBytes(),
+        });
+      });
     });
+  };
+
+  // Setup handler for the main session
+  setupDownloadHandler(session.fromPartition('persist:main'));
+  
+  // Also handle downloads on new sessions (for other profiles)
+  app.on('session-created', (sess) => {
+    setupDownloadHandler(sess);
   });
 
   // --- Permissions Manager ---

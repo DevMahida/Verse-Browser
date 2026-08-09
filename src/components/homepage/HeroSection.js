@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, EyeOff } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
 import TopSites from "./TopSites";
 
 export default function HeroSection() {
-  const { activeTabId, navigate, currentUser } = useBrowserStore();
+  const { activeTabId, navigate, currentUser, isIncognitoWindow } = useBrowserStore();
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -67,8 +67,12 @@ export default function HeroSection() {
       {/* Animated Logo Placeholder */}
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(107,70,193,0.3)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/favicon.png" alt="Verse Logo" className="w-12 h-12 object-contain" />
+          {isIncognitoWindow ? (
+            <EyeOff className="w-8 h-8 text-foreground/80" />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src="/favicon.png" alt="Verse Logo" className="w-12 h-12 object-contain" />
+          )}
         </div>
         {/* Orbital rings mockup */}
         <div className="absolute inset-0 border border-accent/40 rounded-full scale-[1.5] rotate-12" />
@@ -76,10 +80,18 @@ export default function HeroSection() {
       </div>
 
       <h1 className="text-[clamp(1.75rem,4vw,2.25rem)] font-bold text-foreground mb-3 tracking-tight" suppressHydrationWarning>
-        {greetingText()} <span className="inline-block animate-wave"></span>
+        {isIncognitoWindow ? (
+          "You've gone Incognito"
+        ) : (
+          <>{greetingText()} <span className="inline-block animate-wave"></span></>
+        )}
       </h1>
-      <p className="text-foreground/70 mb-8 text-[clamp(1rem,2vw,1.125rem)]">
-        What would you like to explore or ask today?
+      <p className="text-foreground/70 mb-8 text-[clamp(1rem,2vw,1.125rem)] max-w-2xl text-center">
+        {isIncognitoWindow ? (
+          "Now you can browse privately, and other people who use this device won't see your activity. However, downloads and bookmarks will be saved."
+        ) : (
+          "What would you like to explore or ask today?"
+        )}
       </p>
 
       {/* Search Bar */}
