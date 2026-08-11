@@ -93,3 +93,34 @@ a,
 nextjs-portal {
   display: none !important;
 }
+
+/* ── Side Tab Panel ──────────────────────────────────────── */
+.side-tab-panel {
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+}
+
+/* Ultra-thin scrollbar for the side tab list */
+.side-tabs-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.side-tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.side-tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+.side-tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+.side-tabs-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Right-side panel uses left border instead of right */
+.side-tab-panel:last-child {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}

@@ -10,6 +10,7 @@ import AISidebar from "../ai/AISidebar";
 import WebviewContainer from "../browser/WebviewContainer";
 import ClearDataModal from "../modals/ClearDataModal";
 import SavePasswordPrompt from "../toolbar/SavePasswordPrompt";
+import SideTabPanel from "../toolbar/SideTabPanel";
 
 
 
@@ -34,7 +35,9 @@ export default function BrowserLayout() {
     openDownloadsTab,
     openExtensionsTab,
     theme,
-    customColors
+    customColors,
+    sideTabsEnabled,
+    sideTabsPosition,
   } = useBrowserStore();
 
   useEffect(() => {
@@ -267,6 +270,11 @@ export default function BrowserLayout() {
           const state = useBrowserStore.getState();
           state.setResearchMode(!state.researchMode);
           if (!state.isAISidebarOpen) state.setAISidebarOpen(true);
+          return;
+        }
+        if (key === 'v') { // Toggle vertical/side tabs
+          e.preventDefault();
+          useBrowserStore.getState().toggleSideTabs();
           return;
         }
       }
@@ -542,10 +550,20 @@ export default function BrowserLayout() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden relative" role="main">
+        {/* Side Tab Panel — Left */}
+        {sideTabsEnabled && sideTabsPosition === 'left' && (
+          <SideTabPanel />
+        )}
+
         {/* Browser Content (Webviews) */}
         <div className="flex-1 bg-surface relative overflow-auto">
           <WebviewContainer />
         </div>
+
+        {/* Side Tab Panel — Right */}
+        {sideTabsEnabled && sideTabsPosition === 'right' && (
+          <SideTabPanel />
+        )}
 
         {/* AI Sidebar */}
         {isAISidebarOpen && (

@@ -64,12 +64,19 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
     }
   }, []);
 
-  useEffect(() => {
+  const [prevTabUrl, setPrevTabUrl] = useState(activeTab?.url);
+  if (activeTab?.url !== prevTabUrl) {
+    setPrevTabUrl(activeTab?.url);
     if (activeTab) {
       const isNewTab = activeTab.url === 'browser://newtab';
       const displayUrl = activeTab.url.replace('browser://', 'verse://');
       setInputValue(isNewTab ? '' : displayUrl);
+    }
+  }
 
+  useEffect(() => {
+    if (activeTab) {
+      const isNewTab = activeTab.url === 'browser://newtab';
       if (isNewTab && inputRef.current) {
         setTimeout(() => {
           inputRef.current?.focus();

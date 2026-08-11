@@ -1,11 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
-import { Plus, Copy, Pin, Volume2, VolumeX, X, LayoutTemplate } from "lucide-react";
+import { Plus, Copy, Pin, Volume2, VolumeX, X, LayoutTemplate, PanelLeft, Columns2 } from "lucide-react";
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useShallow } from 'zustand/react/shallow';
 
 export default function TabContextMenu({ x, y, tabId, onClose, isStandalone }) {
   const menuRef = useRef(null);
-  const { tabs, addTab, removeMultipleTabs, togglePin, toggleMute, setSplitTabId, activeTabId, splitTabId } = useBrowserStore(
+  const { tabs, addTab, removeMultipleTabs, togglePin, toggleMute, setSplitTabId, activeTabId, splitTabId, sideTabsEnabled, toggleSideTabs } = useBrowserStore(
     useShallow((state) => ({
       tabs: state.tabs,
       addTab: state.addTab,
@@ -15,6 +15,8 @@ export default function TabContextMenu({ x, y, tabId, onClose, isStandalone }) {
       setSplitTabId: state.setSplitTabId,
       activeTabId: state.activeTabId,
       splitTabId: state.splitTabId,
+      sideTabsEnabled: state.sideTabsEnabled,
+      toggleSideTabs: state.toggleSideTabs,
     }))
   );
   
@@ -174,6 +176,19 @@ export default function TabContextMenu({ x, y, tabId, onClose, isStandalone }) {
           className="w-full text-left px-4 py-2 min-h-11 text-red-500 hover:bg-red-500 hover:text-white flex items-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         <X size={14} className="mr-2" /> Close
+      </button>
+
+      <div className="h-px bg-border my-1" />
+
+      <button 
+        onClick={() => { toggleSideTabs(); handleCloseMenu(); }}
+          className="w-full text-left px-4 py-2 min-h-11 hover:bg-accent hover:text-white flex items-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {sideTabsEnabled ? (
+          <><Columns2 size={14} className="mr-2" /> Use horizontal tabs</>
+        ) : (
+          <><PanelLeft size={14} className="mr-2" /> Use vertical tabs</>
+        )}
       </button>
     </div>
   );

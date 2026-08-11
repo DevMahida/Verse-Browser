@@ -82,6 +82,11 @@ export const useBrowserStore = create(
   bookmarks: [],
   bookmarkBarVisibility: 'always', // 'always' or 'new-tab'
   showHomeButton: false, // Hidden by default like Chrome
+  // Side Tab Panel State
+  sideTabsEnabled: false,
+  sideTabsCollapsed: false,
+  sideTabsAutoExpand: true,
+  sideTabsPosition: 'left', // 'left' or 'right'
   installedExtensions: AVAILABLE_EXTENSIONS.map(ext => ({ ...ext, isEnabled: false, isPinned: false })),
   downloads: [],
   hiddenTopSites: [],
@@ -759,6 +764,13 @@ export const useBrowserStore = create(
   toggleAISidebar: () => set((state) => ({ isAISidebarOpen: !state.isAISidebarOpen })),
   setAISidebarOpen: (isOpen) => set({ isAISidebarOpen: isOpen }),
 
+  // Side Tab Panel Actions
+  toggleSideTabs: () => set((state) => ({ sideTabsEnabled: !state.sideTabsEnabled })),
+  setSideTabsCollapsed: (collapsed) => set({ sideTabsCollapsed: collapsed }),
+  toggleSideTabsCollapsed: () => set((state) => ({ sideTabsCollapsed: !state.sideTabsCollapsed })),
+  setSideTabsAutoExpand: (value) => set({ sideTabsAutoExpand: value }),
+  setSideTabsPosition: (position) => set({ sideTabsPosition: position }),
+
   openHistoryTab: () => set((state) => {
     const existingHistoryTab = state.tabs.find(t => t.url === 'browser://history');
     if (existingHistoryTab) {
@@ -1290,6 +1302,10 @@ export const useBrowserStore = create(
         focusedPane: state.focusedPane,
         tabs: state.tabs,
         recentlyClosedTabs: state.recentlyClosedTabs,
+        sideTabsEnabled: state.sideTabsEnabled,
+        sideTabsCollapsed: state.sideTabsCollapsed,
+        sideTabsAutoExpand: state.sideTabsAutoExpand,
+        sideTabsPosition: state.sideTabsPosition,
         // Notice: sessionPermissions and activePermissionRequests are intentionally omitted here!
       }),
     }

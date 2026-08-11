@@ -224,7 +224,7 @@ const SortableTab = memo(function SortableTab({ tab, isActive, setActiveTab, rem
 });
 
 export default function TopBar() {
-  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset, isIncognitoWindow } = useBrowserStore(
+  const { tabs, activeTabId, splitTabId, setFocusedPane, setActiveTab, removeTab, addTab, isLoggedIn, userProfilePic, currentUser, accounts, checkLoginState, logoutGoogle, switchAccount, toggleMute, openSettingsTab, setDropdownOffset, isIncognitoWindow, sideTabsEnabled } = useBrowserStore(
     useShallow((state) => ({
       tabs: state.tabs,
       activeTabId: state.activeTabId,
@@ -242,6 +242,7 @@ export default function TopBar() {
       switchAccount: state.switchAccount,
       toggleMute: state.toggleMute,
       openSettingsTab: state.openSettingsTab,
+      sideTabsEnabled: state.sideTabsEnabled,
     }))
   );
 
@@ -389,89 +390,96 @@ export default function TopBar() {
         <span className="text-sm font-semibold tracking-wide">Verse</span>
       </div>
 
-      {/* Tab Search */}
-      <div className="relative flex items-center justify-center h-8 no-drag-region ml-1">
-        <button 
-          aria-label="Search Tabs"
-          onClick={(e) => {
-            if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const popupWidth = 256; // w-64
-              const popupHeight = 350;
-              let x = Math.round(window.screenX + rect.left);
-              let y = Math.round(window.screenY + rect.bottom + 8);
-              
-              if (x + popupWidth > window.screenX + window.innerWidth) {
-                x = window.screenX + window.innerWidth - popupWidth;
+      {/* Tab Search — hidden when side tabs are active */}
+      {!sideTabsEnabled && (
+        <div className="relative flex items-center justify-center h-8 no-drag-region ml-1">
+          <button 
+            aria-label="Search Tabs"
+            onClick={(e) => {
+              if (window.electron && window.electron.tabManager && window.electron.tabManager.openPopup) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const popupWidth = 256;
+                const popupHeight = 350;
+                let x = Math.round(window.screenX + rect.left);
+                let y = Math.round(window.screenY + rect.bottom + 8);
+                
+                if (x + popupWidth > window.screenX + window.innerWidth) {
+                  x = window.screenX + window.innerWidth - popupWidth;
+                }
+                
+                const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                const popupUrl = `${baseUrl}/popup?type=tab-search`;
+
+                window.electron.tabManager.openPopup({
+                  url: popupUrl,
+                  width: popupWidth,
+                  height: popupHeight,
+                  x,
+                  y
+                });
               }
-              
-              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-              const popupUrl = `${baseUrl}/popup?type=tab-search`;
-
-              window.electron.tabManager.openPopup({
-                url: popupUrl,
-                width: popupWidth,
-                height: popupHeight,
-                x,
-                y
-              });
-            }
-          }}
-          className="h-8 w-8 flex items-center justify-center hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px focus-visible:ring-2 focus-visible:outline-none rounded-md cursor-pointer"
-        >
-          <ChevronDown size={16} />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div 
-        className="flex-1 flex items-end space-x-1 overflow-x-auto no-scrollbar"
-        ref={tabsContainerRef}
-        onMouseLeave={() => setFrozenTabWidth(null)}
-        role="tablist"
-      >
-        <DndContext 
-          id="browser-tabs-dnd"
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <SortableContext 
-            items={tabs.map(t => t.id)} 
-            strategy={horizontalListSortingStrategy}
+            }}
+            className="h-8 w-8 flex items-center justify-center hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px focus-visible:ring-2 focus-visible:outline-none rounded-md cursor-pointer"
           >
-            {tabs.map((tab) => (
-              <SortableTab 
-                key={tab.id} 
-                tab={tab} 
-                isActive={tab.id === activeTabId || tab.id === splitTabId} 
-                setActiveTab={handleSetActiveTab}
-                removeTab={handleRemoveTab} 
-                toggleMute={toggleMute}
-                frozenTabWidth={frozenTabWidth}
-                tabCount={tabs.length}
-                isTearingOff={tearingOffTabId === tab.id}
-                onContextMenu={handleContextMenu}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+            <ChevronDown size={16} />
+          </button>
+        </div>
+      )}
 
-        {/* Add Tab Button */}
-        <button
-          onClick={() => {
-            setFrozenTabWidth(null);
-            addTab();
-          }}
-          aria-label="New Tab"
-          className="relative before:absolute before:-inset-2 before:content-[''] h-8 w-8 flex items-center justify-center rounded-t-lg hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px no-drag-region focus-visible:ring-2 focus-visible:outline-none"
+      {/* Tabs — hidden when side tabs are active */}
+      {!sideTabsEnabled && (
+        <div 
+          className="flex-1 flex items-end space-x-1 overflow-x-auto no-scrollbar"
+          ref={tabsContainerRef}
+          onMouseLeave={() => setFrozenTabWidth(null)}
+          role="tablist"
         >
-          <Plus size={16} />
-        </button>
-      </div>
+          <DndContext 
+            id="browser-tabs-dnd"
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SortableContext 
+              items={tabs.map(t => t.id)} 
+              strategy={horizontalListSortingStrategy}
+            >
+              {tabs.map((tab) => (
+                <SortableTab 
+                  key={tab.id} 
+                  tab={tab} 
+                  isActive={tab.id === activeTabId || tab.id === splitTabId} 
+                  setActiveTab={handleSetActiveTab}
+                  removeTab={handleRemoveTab} 
+                  toggleMute={toggleMute}
+                  frozenTabWidth={frozenTabWidth}
+                  tabCount={tabs.length}
+                  isTearingOff={tearingOffTabId === tab.id}
+                  onContextMenu={handleContextMenu}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {/* Add Tab Button */}
+          <button
+            onClick={() => {
+              setFrozenTabWidth(null);
+              addTab();
+            }}
+            aria-label="New Tab"
+            className="relative before:absolute before:-inset-2 before:content-[''] h-8 w-8 flex items-center justify-center rounded-t-lg hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors mb-px no-drag-region focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Spacer when side tabs are active to push window controls to the right */}
+      {sideTabsEnabled && <div className="flex-1" />}
 
       {/* Window Controls */}
       <div className="flex items-center h-full text-foreground/70 space-x-2 relative no-drag-region" ref={menuRef}>
