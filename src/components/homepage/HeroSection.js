@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Search, Sparkles, EyeOff } from "lucide-react";
-import { useBrowserStore } from "@/store/useBrowserStore";
+import { useBrowserStore, formatUrl } from "@/store/useBrowserStore";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import SuggestionsDropdown from "@/components/common/SuggestionsDropdown";
 import TopSites from "./TopSites";
 
 export default function HeroSection() {
-  const { activeTabId, navigate, currentUser, isIncognitoWindow } = useBrowserStore();
+  const { activeTabId, navigate, currentUser, isIncognitoWindow, addToSearchHistory } = useBrowserStore();
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -25,6 +25,7 @@ export default function HeroSection() {
     
     if (q.trim() !== '') {
       navigate(activeTabId, q.trim());
+      addToSearchHistory(q.trim(), formatUrl(q.trim()));
       setIsFocused(false);
     }
   };

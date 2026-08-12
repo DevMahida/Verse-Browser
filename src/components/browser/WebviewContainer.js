@@ -14,12 +14,13 @@ import SettingsPage from "./SettingsPage";
 
 const TabWebview = memo(({ tab, isActive, onFocus, styleClass }) => {
   const containerRef = useRef(null);
-  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, removeTab } = useBrowserStore(
+  const { updateTab, updateFindState, addToHistory, updateHistoryMeta, updateSearchHistoryMeta, checkLoginState, isIncognitoWindow, removeTab } = useBrowserStore(
     useShallow((state) => ({
       updateTab: state.updateTab,
       updateFindState: state.updateFindState,
       addToHistory: state.addToHistory,
       updateHistoryMeta: state.updateHistoryMeta,
+      updateSearchHistoryMeta: state.updateSearchHistoryMeta,
       checkLoginState: state.checkLoginState,
       isIncognitoWindow: state.isIncognitoWindow,
       removeTab: state.removeTab,
@@ -63,12 +64,18 @@ const TabWebview = memo(({ tab, isActive, onFocus, styleClass }) => {
           break;
         case 'page-title-updated':
           updateTab(tab.id, { title: data.title });
-          if (!isIncognitoWindow) updateHistoryMeta(internalUrl.current, { title: data.title });
+          if (!isIncognitoWindow) {
+            updateHistoryMeta(internalUrl.current, { title: data.title });
+            updateSearchHistoryMeta(internalUrl.current, { title: data.title });
+          }
           break;
         case 'page-favicon-updated':
           if (data.favicons && data.favicons.length > 0) {
             updateTab(tab.id, { favicon: data.favicons[0] });
-            if (!isIncognitoWindow) updateHistoryMeta(internalUrl.current, { favicon: data.favicons[0] });
+            if (!isIncognitoWindow) {
+              updateHistoryMeta(internalUrl.current, { favicon: data.favicons[0] });
+              updateSearchHistoryMeta(internalUrl.current, { favicon: data.favicons[0] });
+            }
           }
           break;
         case 'did-start-loading':
@@ -103,7 +110,7 @@ const TabWebview = memo(({ tab, isActive, onFocus, styleClass }) => {
       }
     });
     return cleanup;
-  }, [tab.id, updateTab, addToHistory, updateHistoryMeta, checkLoginState, isIncognitoWindow, updateFindState, removeTab]);
+  }, [tab.id, updateTab, addToHistory, updateHistoryMeta, updateSearchHistoryMeta, checkLoginState, isIncognitoWindow, updateFindState, removeTab]);
 
   // 3. Bounds & Visibility
   useEffect(() => {

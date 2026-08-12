@@ -77,7 +77,9 @@ export const useBrowserStore = create(
       isIncognitoWindow: initialIsIncognito,
       firebaseUid: null,
       lastHistoryDocId: null,
+      lastSearchHistoryId: null,
       history: [],
+  searchHistory: [], // Stores only user-initiated address bar searches: { id, query, url, domain, title, favicon, timestamp, isDirectUrl }
   readingList: [],
   bookmarks: [],
   bookmarkBarVisibility: 'always', // 'always' or 'new-tab'
@@ -948,6 +950,59 @@ export const useBrowserStore = create(
   clearHistory: () => set({ history: [] }),
   removeFromHistory: (id) => set((state) => ({ history: state.history.filter(h => h.id !== id) })),
 
+  // Search History Actions — separate from browsing history
+  // Only captures what the user explicitly typed in the address bar
+  addToSearchHistory: (rawInput, resolvedUrl) => {
+    if (!rawInput || !resolvedUrl) return;
+    if (resolvedUrl.startsWith('browser://')) return;
+    const state = get();
+    if (state.isIncognitoWindow) return;
+
+    // Extract domain from resolved URL
+    let domain = '';
+    try {
+      domain = new URL(resolvedUrl).hostname.replace(/^www\./, '');
+    } catch (e) {
+      domain = resolvedUrl;
+    }
+
+    // Determine if the user typed a URL directly vs a search query
+    const trimmedInput = rawInput.trim();
+    const isDirectUrl = (trimmedInput.includes('.') && !trimmedInput.includes(' ')) ||
+      /^https?:\/\//.test(trimmedInput);
+
+    const newItem = {
+      id: Date.now().toString(),
+      query: trimmedInput,
+      url: resolvedUrl,
+      domain,
+      title: trimmedInput,
+      favicon: null,
+      timestamp: Date.now(),
+      isDirectUrl,
+    };
+
+    set({ lastSearchHistoryId: newItem.id });
+    set((state) => ({
+      searchHistory: [newItem, ...state.searchHistory].slice(0, 500),
+    }));
+  },
+
+  updateSearchHistoryMeta: (url, updates) => {
+    const state = get();
+    if (state.isIncognitoWindow) return;
+    const targetId = state.lastSearchHistoryId;
+    if (!targetId) return;
+
+    set((state) => ({
+      searchHistory: state.searchHistory.map(item =>
+        item.id === targetId ? { ...item, ...updates } : item
+      ),
+    }));
+  },
+
+  clearSearchHistory: () => set({ searchHistory: [] }),
+
   // Bookmarks Actions
   toggleBookmark: async (url, title, favicon) => {
     if (url.startsWith('browser://')) return;
@@ -1279,6 +1334,7 @@ export const useBrowserStore = create(
       },
       partialize: (state) => ({
         history: state.history,
+        searchHistory: state.searchHistory,
         bookmarks: state.bookmarks,
         bookmarkBarVisibility: state.bookmarkBarVisibility,
         installedExtensions: state.installedExtensions,

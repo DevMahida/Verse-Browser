@@ -33,6 +33,8 @@ export default function SuggestionsDropdown({ suggestions, onSelect, selectedInd
           const isHistory = suggestion.type === 'history';
           const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
           const url = typeof suggestion === 'string' ? null : suggestion.url;
+          const domain = typeof suggestion === 'string' ? null : suggestion.domain;
+          const favicon = typeof suggestion === 'string' ? null : suggestion.favicon;
 
           return (
             <li key={index}>
@@ -44,14 +46,22 @@ export default function SuggestionsDropdown({ suggestions, onSelect, selectedInd
                 )}
               >
                 {isHistory ? (
-                  <Clock className="w-4 h-4 text-gray-500 shrink-0" />
+                  favicon ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={favicon} alt="" className="w-4 h-4 shrink-0 rounded-sm" onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = ''; }} />
+                      <Clock className="w-4 h-4 text-gray-500 shrink-0" style={{ display: 'none' }} />
+                    </>
+                  ) : (
+                    <Clock className="w-4 h-4 text-gray-500 shrink-0" />
+                  )
                 ) : (
                   <Search className="w-4 h-4 text-gray-500 shrink-0" />
                 )}
                 <div className="flex flex-col min-w-0 flex-1">
                   <span className="truncate">{text}</span>
-                  {isHistory && url && (
-                    <span className="truncate text-xs text-foreground/50">{url}</span>
+                  {isHistory && (domain || url) && (
+                    <span className="truncate text-xs text-foreground/50">{domain || url}</span>
                   )}
                 </div>
               </button>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
-import { useBrowserStore } from "@/store/useBrowserStore";
+import { useBrowserStore, formatUrl } from "@/store/useBrowserStore";
 
 export default function AddressInput({ activePaneTabId, activeTab }) {
   const [inputValue, setInputValue] = useState("");
@@ -11,6 +11,7 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
   const inputRef = useRef(null);
   
   const navigate = useBrowserStore(state => state.navigate);
+  const addToSearchHistory = useBrowserStore(state => state.addToSearchHistory);
 
   const { suggestions } = useSearchSuggestions(inputValue);
   
@@ -49,11 +50,12 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
         const targetUrl = typeof suggestion === 'string' ? suggestion : (suggestion.url || suggestion.text);
         setInputValue(targetUrl);
         navigate(activePaneTabId, targetUrl);
+        addToSearchHistory(targetUrl, formatUrl(targetUrl));
         setIsFocused(false);
       });
       return cleanup;
     }
-  }, [navigate, activePaneTabId]);
+  }, [navigate, activePaneTabId, addToSearchHistory]);
   
   useEffect(() => {
     if (window.electron && window.electron.tabManager && window.electron.tabManager.onSuggestionsBlur) {
@@ -120,6 +122,7 @@ export default function AddressInput({ activePaneTabId, activeTab }) {
         targetUrl = targetUrl.replace('verse://', 'browser://');
       }
       navigate(activePaneTabId, targetUrl);
+      addToSearchHistory(inputValue.trim(), formatUrl(targetUrl));
       setIsFocused(false);
       setSelectedIndex(-1);
       e.target?.blur?.();

@@ -8,32 +8,53 @@ export function useSearchSuggestions(query, delay = 250) {
   useEffect(() => {
     const trimmed = query ? query.trim() : '';
 
-    const getHistoryMatches = (searchQuery) => {
-      const history = useBrowserStore.getState().history || [];
+    // When the input is empty, show nothing
+    if (!trimmed) {
+      setSuggestions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const getSearchHistoryMatches = (searchQuery) => {
+      const searchHistory = useBrowserStore.getState().searchHistory || [];
       const isIncognito = useBrowserStore.getState().isIncognitoWindow;
       
-      // Do not show history in incognito mode
+      // Do not show search history in incognito mode
       if (isIncognito) return [];
 
-      const uniqueUrls = new Set();
+      const seenQueries = new Set();
       const matches = [];
-
-      const maxResults = searchQuery ? 2 : 6;
       const lowerQuery = searchQuery.toLowerCase();
+      const maxResults = 5;
 
-      for (const item of history) {
-        if (!item.url || item.url.startsWith('browser://') || uniqueUrls.has(item.url)) continue;
+      for (const item of searchHistory) {
+        if (!item.query) continue;
 
-        if (!searchQuery) {
-          matches.push({ type: 'history', text: item.title || item.url, url: item.url });
-          uniqueUrls.add(item.url);
-        } else {
-          const titleMatch = (item.title || '').toLowerCase().includes(lowerQuery);
-          const urlMatch = item.url.toLowerCase().includes(lowerQuery);
-          if (titleMatch || urlMatch) {
-            matches.push({ type: 'history', text: item.title || item.url, url: item.url });
-            uniqueUrls.add(item.url);
-          }
+        // Deduplicate by query text (case-insensitive)
+        const queryKey = item.query.toLowerCase();
+        if (seenQueries.has(queryKey)) continue;
+
+        // Match against query, url, title, and domain
+        const queryMatch = queryKey.includes(lowerQuery);
+        const urlMatch = (item.url || '').toLowerCase().includes(lowerQuery);
+        const titleMatch = (item.title || '').toLowerCase().includes(lowerQuery);
+        const domainMatch = (item.domain || '').toLowerCase().includes(lowerQuery);
+
+        if (queryMatch || urlMatch || titleMatch || domainMatch) {
+          // For direct URL searches, show domain as display text
+          // For text searches, show the query
+          const displayText = item.isDirectUrl
+            ? (item.title && item.title !== item.query ? item.title : item.domain || item.query)
+            : (item.title && item.title !== item.query ? item.title : item.query);
+
+          matches.push({
+            type: 'history',
+            text: displayText,
+            url: item.url,
+            domain: item.domain,
+            favicon: item.favicon,
+          });
+          seenQueries.add(queryKey);
         }
 
         if (matches.length >= maxResults) break;
@@ -41,9 +62,10 @@ export function useSearchSuggestions(query, delay = 250) {
       return matches;
     };
 
-    if (!trimmed || (trimmed.includes('.') && !trimmed.includes(' '))) {
+    // For URL-like inputs (has a dot, no spaces), show filtered search history only
+    if (trimmed.includes('.') && !trimmed.includes(' ')) {
       const timer = setTimeout(() => {
-        setSuggestions(getHistoryMatches(trimmed));
+        setSuggestions(getSearchHistoryMatches(trimmed));
         setIsLoading(false);
       }, 0);
       return () => clearTimeout(timer);
@@ -52,7 +74,7 @@ export function useSearchSuggestions(query, delay = 250) {
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
-        const historyMatches = getHistoryMatches(trimmed);
+        const historyMatches = getSearchHistoryMatches(trimmed);
         const targetUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(trimmed)}`;
         let data = null;
         
@@ -71,7 +93,7 @@ export function useSearchSuggestions(query, delay = 250) {
 
         setSuggestions([...historyMatches, ...searchMatches]);
       } catch (err) {
-        setSuggestions(getHistoryMatches(trimmed));
+        setSuggestions(getSearchHistoryMatches(trimmed));
       } finally {
         setIsLoading(false);
       }
@@ -86,3 +108,5 @@ export function useSearchSuggestions(query, delay = 250) {
 
   return { suggestions, isLoading };
 }
+
+
