@@ -99,6 +99,7 @@ def _call_llm(system_prompt: str, user_text: str, api_key: str | None = None, mo
     """
     if not api_key:
         api_key = os.environ.get("OPENROUTER_API_KEY")
+
     if not api_key:
         raise ValueError(
             "No API key provided. Set the OPENROUTER_API_KEY environment variable "

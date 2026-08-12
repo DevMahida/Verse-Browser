@@ -9,6 +9,7 @@ import {
 import { useBrowserStore } from "@/store/useBrowserStore";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useResizableWidth } from "@/hooks/useResizableWidth";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 
@@ -139,7 +140,7 @@ export default function AISidebar() {
     saveAiSession, deleteAiSession, setCurrentAiSessionId,
     clearAllAiSessions, setSelectedAiModel,
     researchMode, setResearchMode, profileId,
-    openRouterApiKey, setOpenRouterApiKey,
+    openRouterApiKey, setOpenRouterApiKey, addTab
   } = useBrowserStore();
 
   const [messages, setMessages] = useState([]);
@@ -766,6 +767,7 @@ export default function AISidebar() {
         }
         let systemPrompt = "You are a helpful, intelligent AI assistant built into the Verse Browser.\n";
         systemPrompt += `The current date and time is: ${new Date().toLocaleString()}.\n`;
+        systemPrompt += `The user's timezone is: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Tailor your responses to their location, using their local currency and regional context when applicable.\n`;
         systemPrompt += "Please format your responses using Markdown for readability. Use bolding for key terms, short paragraphs, and bullet points where appropriate. Keep answers concise, clear, and visually structured. If the user just says 'hi' or greets you, respond with a very short, polite greeting (e.g. 'Hi there! How can I help you today?') and nothing more.\n";
         systemPrompt += "Answer the user's questions utilizing your general knowledge. If the user asks about the current page content, refer to the provided context below.\n\n";
       if (pageText) {
@@ -816,7 +818,31 @@ export default function AISidebar() {
       if (result.error) throw new Error(result.error);
       
       let responseText = result.answer || "No response received.";
-      const toolCallMatch = responseText.match(/\[TOOL_CALL:\s*([^\s]+)\s+(.*?)\]/is);
+      let toolCallMatch = responseText.match(/\[TOOL_CALL:\s*([^\s]+)\s+(.*?)\]/is);
+      
+      if (!toolCallMatch) {
+         // Handle <|tool_call_start|>...<|tool_call_end|> format natively emitted by some models
+         const altMatch = responseText.match(/<\|tool_call_start\|>\s*\[?([a-zA-Z0-9_]+)\((.*?)\)/is);
+         if (altMatch) {
+            const toolName = altMatch[1];
+            const argStr = altMatch[2];
+            let jsonArgs = {};
+            const argRegex = /([a-zA-Z0-9_]+)\s*=\s*(?:'([^']*)'|"([^"]*)")/g;
+            let m;
+            while ((m = argRegex.exec(argStr)) !== null) {
+               jsonArgs[m[1]] = m[2] !== undefined ? m[2] : m[3];
+            }
+            
+            const fullBlockMatch = responseText.match(/<\|tool_call_start\|>.*?<\|tool_call_end\|>/is);
+            const fullReplaceStr = fullBlockMatch ? fullBlockMatch[0] : altMatch[0];
+            
+            toolCallMatch = [
+              fullReplaceStr,
+              `browser.${toolName}`, // Assume browser server for native model tool calls
+              JSON.stringify(jsonArgs)
+            ];
+         }
+      }
       
       if (toolCallMatch) {
          const fullMatch = toolCallMatch[0];
@@ -824,11 +850,37 @@ export default function AISidebar() {
          const argStr = toolCallMatch[2];
          
          responseText = responseText.replace(fullMatch, "").trim();
-         if (responseText) {
-            setMessages(prev => [...prev, { role: "assistant", content: responseText, model: result.usedModel || selectedAiModel }]);
+         // Suppress any hallucinated conversational filler text that precedes the tool call.
+         // We only want to show the tool execution loader.
+         
+         let [serverName, toolName] = toolPath.split('.');
+         
+         // Fallback logic if the model emitted an invalid or missing server name
+         let isValidServer = false;
+         try {
+            const parsedTools = typeof combined_tools === "string" ? JSON.parse(combined_tools) : combined_tools;
+            isValidServer = parsedTools.some(s => s.server === serverName);
+         } catch(e) {}
+
+         if (!toolName || !isValidServer || serverName === "server") {
+            if (!toolName) {
+               toolName = serverName; // the model just output 'toolName'
+            } else if (serverName === "server") {
+               // the model output 'server.toolName'
+            }
+            
+            serverName = "browser"; // default fallback
+            try {
+               const parsedTools = typeof combined_tools === "string" ? JSON.parse(combined_tools) : combined_tools;
+               for (const s of parsedTools) {
+                  if (s.tools && s.tools.some(t => t.name === toolName)) {
+                     serverName = s.server;
+                     break;
+                  }
+               }
+            } catch(e) {}
          }
          
-         const [serverName, toolName] = toolPath.split('.');
          let parsedArgs = {};
          try { parsedArgs = JSON.parse(argStr.trim()); } catch(e) {}
          
@@ -1267,6 +1319,7 @@ export default function AISidebar() {
             {messages.map((msg, idx) => {
               if (msg.role === "system") {
                 const isError = msg.content.startsWith("Tool failed:");
+                const isExecuting = msg.content.startsWith("Executing tool");
                 const displayText = msg.content
                   .replace(/^Tool result:\nLatest web results:\n/, 'Found web results: ')
                   .replace(/^Tool result:\n/, 'Found tool data: ');
@@ -1274,7 +1327,7 @@ export default function AISidebar() {
                 return (
                   <div key={idx} className="flex justify-center w-full my-1">
                     <span className={`text-[10px] px-3 py-1 rounded-full flex items-center gap-1.5 max-w-[80%] ${isError ? 'bg-red-500/10 text-red-400' : 'bg-surface border border-border text-foreground/50'}`}>
-                       {isError ? <HelpCircle size={10} className="shrink-0" /> : <Globe size={10} className="shrink-0" />}
+                       {isError ? <HelpCircle size={10} className="shrink-0" /> : isExecuting ? <Loader2 size={10} className="shrink-0 animate-spin text-accent" /> : <Globe size={10} className="shrink-0" />}
                        <span className="truncate">{displayText}</span>
                     </span>
                   </div>
@@ -1383,7 +1436,14 @@ export default function AISidebar() {
                       {expandedResearch[idx] && (
                         <div className="border-t border-border/30 pt-3 mt-1">
                           <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
                             components={{
+                              table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-sm text-left border-collapse" {...props} /></div>,
+                              thead: ({node, ...props}) => <thead className="bg-foreground/5 text-foreground/80 font-semibold border-b border-border/50" {...props} />,
+                              tbody: ({node, ...props}) => <tbody className="divide-y divide-border/30" {...props} />,
+                              tr: ({node, ...props}) => <tr className="hover:bg-foreground/5 transition-colors" {...props} />,
+                              th: ({node, ...props}) => <th className="px-3 py-2 text-nowrap" {...props} />,
+                              td: ({node, ...props}) => <td className="px-3 py-2 align-top" {...props} />,
                               ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
                               ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
                               li: ({node, ...props}) => <li className="pl-1" {...props} />,
@@ -1392,7 +1452,17 @@ export default function AISidebar() {
                               h1: ({node, ...props}) => <h1 className="text-lg font-bold my-2" {...props} />,
                               h2: ({node, ...props}) => <h2 className="text-base font-bold my-2" {...props} />,
                               h3: ({node, ...props}) => <h3 className="text-sm font-bold my-2" {...props} />,
-                              a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                              a: ({node, href, ...props}) => (
+                                <a 
+                                  className="text-accent hover:underline cursor-pointer" 
+                                  href={href}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (href) addTab(href);
+                                  }}
+                                  {...props} 
+                                />
+                              ),
                             }}
                           >
                             {msg.content}
@@ -1404,7 +1474,14 @@ export default function AISidebar() {
                     /* ── Regular Chat Message ───────────────────────────── */
                     <div className="flex flex-col w-full">
                       <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
                         components={{
+                          table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-sm text-left border-collapse" {...props} /></div>,
+                          thead: ({node, ...props}) => <thead className="bg-foreground/5 text-foreground/80 font-semibold border-b border-border/50" {...props} />,
+                          tbody: ({node, ...props}) => <tbody className="divide-y divide-border/30" {...props} />,
+                          tr: ({node, ...props}) => <tr className="hover:bg-foreground/5 transition-colors" {...props} />,
+                          th: ({node, ...props}) => <th className="px-3 py-2 text-nowrap" {...props} />,
+                          td: ({node, ...props}) => <td className="px-3 py-2 align-top" {...props} />,
                           ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
                           ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
                           li: ({node, ...props}) => <li className="pl-1" {...props} />,
@@ -1413,7 +1490,17 @@ export default function AISidebar() {
                           h1: ({node, ...props}) => <h1 className="text-lg font-bold my-2" {...props} />,
                           h2: ({node, ...props}) => <h2 className="text-base font-bold my-2" {...props} />,
                           h3: ({node, ...props}) => <h3 className="text-sm font-bold my-2" {...props} />,
-                          a: ({node, ...props}) => <a className="text-accent hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                          a: ({node, href, ...props}) => (
+                            <a 
+                              className="text-accent hover:underline cursor-pointer" 
+                              href={href}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (href) addTab(href);
+                              }}
+                              {...props} 
+                            />
+                          ),
                         }}
                       >
                         {msg.content}

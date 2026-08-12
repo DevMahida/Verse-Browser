@@ -801,7 +801,11 @@ app.whenReady().then(async () => {
     try {
       const { endpoint, payload: reqPayload } = payload || {};
       const envKeys = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || '';
-      let envKey = envKeys.includes(',') ? envKeys.split(',')[0].trim() : envKeys.trim();
+      let envKey = envKeys.trim();
+      if (envKeys.includes(',')) {
+        const keysArr = envKeys.split(',').map(k => k.trim()).filter(Boolean);
+        envKey = keysArr[Math.floor(Math.random() * keysArr.length)];
+      }
       const apiKey = reqPayload?.apiKey || envKey;
       if (!apiKey?.trim()) {
         return { error: 'OpenRouter API key not configured. Please enter your API key in AI settings or set OPENROUTER_API_KEYS in .env.local.' };
@@ -1379,10 +1383,17 @@ app.whenReady().then(async () => {
       }
       case 'aiRequest': {
         const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://versr-ai-browser-verse.hf.space';
+        const envKeys = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || '';
+        let envKey = envKeys.trim();
+        if (envKeys.includes(',')) {
+          const keysArr = envKeys.split(',').map(k => k.trim()).filter(Boolean);
+          envKey = keysArr[Math.floor(Math.random() * keysArr.length)];
+        }
+        
         const response = await fetch(`${AI_BACKEND_URL}${data.endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...data.payload, api_key: process.env.OPENROUTER_API_KEY }),
+          body: JSON.stringify({ ...data.payload, api_key: envKey }),
         });
         return await response.json();
       }
